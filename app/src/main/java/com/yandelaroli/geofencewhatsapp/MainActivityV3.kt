@@ -149,6 +149,14 @@ private fun AppScreen() {
         }
 
         OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.fillMaxWidth(),enabled=streetSelected,label={Text("Número")},singleLine=true)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Endereço completo", style = MaterialTheme.typography.labelMedium)
+                Text(fields().display().ifBlank { "Preencha os campos acima para montar o endereço." })
+            }
+        }
+
         Button(onClick={if(state.isBlank()||!citySelected||!streetSelected)status="Escolha Estado, Cidade e Rua." else geocode(context,fields().query()){r->r.fold({apply(it);status="Endereço encontrado."},{status="Não encontrei esse endereço."})}},modifier=Modifier.fillMaxWidth()){Text("Buscar endereço")}
         Button(onClick={when{!hasFine()->locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION));!locationEnabled()->context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));else->{val token=CancellationTokenSource();locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,token.token).addOnSuccessListener{l->if(l==null)status="Não foi possível obter sua localização." else reverse(context,l.latitude,l.longitude){r->if(r!=null)apply(r.copy(lat=l.latitude,lon=l.longitude))else{lat=l.latitude;lon=l.longitude;selectedAddress="Minha localização atual"};if(name.isBlank())name="Local atual";status="Localização atual selecionada."}}}}},modifier=Modifier.fillMaxWidth()){Text("Usar minha localização atual")}
         if(lat!=null&&lon!=null)Card(Modifier.fillMaxWidth()){Column(Modifier.padding(10.dp)){Text("Local selecionado");Text(selectedAddress.ifBlank{fields().display()})}}
