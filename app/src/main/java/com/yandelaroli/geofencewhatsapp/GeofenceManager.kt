@@ -29,9 +29,10 @@ class GeofenceManager(private val context: Context) {
         }
 
         val geofences = enabledRules.map { rule ->
+            val approachRadius = maxOf(rule.radiusMeters, ProximityTrackingService.APPROACH_RADIUS_METERS)
             Geofence.Builder()
                 .setRequestId(rule.id)
-                .setCircularRegion(rule.latitude, rule.longitude, rule.radiusMeters)
+                .setCircularRegion(rule.latitude, rule.longitude, approachRadius)
                 .setExpirationDuration(Geofence.NEVER_EXPIRE)
                 .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
                 .build()
