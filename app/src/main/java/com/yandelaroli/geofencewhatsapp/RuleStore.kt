@@ -17,6 +17,7 @@ class RuleStore(context: Context) {
                     GeofenceRule(
                         id = item.optString("id"),
                         name = item.optString("name", "Local"),
+                        address = item.optString("address", "Endereço não informado"),
                         latitude = item.optDouble("latitude"),
                         longitude = item.optDouble("longitude"),
                         radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(),
@@ -36,6 +37,7 @@ class RuleStore(context: Context) {
                 JSONObject()
                     .put("id", rule.id)
                     .put("name", rule.name)
+                    .put("address", rule.address)
                     .put("latitude", rule.latitude)
                     .put("longitude", rule.longitude)
                     .put("radiusMeters", rule.radiusMeters.toDouble())
