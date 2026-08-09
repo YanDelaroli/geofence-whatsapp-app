@@ -114,7 +114,7 @@ class ProximityTrackingService : Service() {
                 PendingIntent.getActivity(
                     this,
                     7001,
-                    Intent(this, MainActivity::class.java),
+                    Intent(this, MainActivityV2::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
