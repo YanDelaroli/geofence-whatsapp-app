@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
 object ArrivalNotifier {
@@ -35,21 +36,30 @@ object ArrivalNotifier {
             )
         }
 
+        if (rule.autoSendAuthorized && isAccessibilityEnabled(context)) {
+            AutoSendCoordinator.arm(context, rule.id)
+            runCatching { context.startActivity(openWhatsApp) }
+                .onFailure { AutoSendCoordinator.clear(context) }
+        }
+
+        val automaticReady = rule.autoSendAuthorized && isAccessibilityEnabled(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle("Você chegou: ${rule.name}")
             .setContentText(
-                if (rule.autoSendAuthorized)
-                    "Envio automático já autorizado para este local."
-                else
-                    "Toque para abrir o WhatsApp com a mensagem pronta."
+                when {
+                    automaticReady -> "Envio automático autorizado. Abrindo o WhatsApp..."
+                    rule.autoSendAuthorized -> "Envio automático autorizado, mas a Acessibilidade precisa ser ativada."
+                    else -> "Toque para abrir o WhatsApp com a mensagem pronta."
+                }
             )
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
-                    if (rule.autoSendAuthorized)
-                        "Você entrou na área '${rule.name}'. O envio automático está autorizado para esta regra."
-                    else
-                        "Você entrou na área '${rule.name}'. Você pode abrir o WhatsApp agora ou autorizar o envio automático para este local nas próximas vezes."
+                    when {
+                        automaticReady -> "Você entrou na área '${rule.name}'. O app abriu o WhatsApp e tentará tocar em Enviar automaticamente usando a autorização salva para esta regra."
+                        rule.autoSendAuthorized -> "Você autorizou o envio automático para '${rule.name}', mas o serviço de Acessibilidade do Geofence WhatsApp ainda não está ativo."
+                        else -> "Você entrou na área '${rule.name}'. Você pode abrir o WhatsApp agora ou autorizar o envio automático para este local nas próximas vezes."
+                    }
                 )
             )
             .setAutoCancel(true)
@@ -71,8 +81,32 @@ object ArrivalNotifier {
                 "Autorizar automático",
                 authorizePendingIntent
             )
+        } else if (!automaticReady) {
+            val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val settingsPendingIntent = PendingIntent.getActivity(
+                context,
+                rule.id.hashCode() xor 0x25A7,
+                settingsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_manage,
+                "Ativar Acessibilidade",
+                settingsPendingIntent
+            )
         }
 
         manager.notify(rule.id.hashCode(), builder.build())
+    }
+
+    private fun isAccessibilityEnabled(context: Context): Boolean {
+        val expected = "${context.packageName}/${AutoSendAccessibilityService::class.java.name}"
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
     }
 }
