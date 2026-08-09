@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -128,10 +130,24 @@ private fun AppScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         Text("Mensagem por localização",style=MaterialTheme.typography.headlineSmall)
         if(editId!=null) Card(Modifier.fillMaxWidth()){Column(Modifier.padding(10.dp)){Text("Editando local salvo");TextButton(onClick={clearForm()}){Text("Cancelar edição")}}}
-        CompactSelector("Estado",state,states.map{"${it.uf} - ${it.name}"},if(loadingStates)"Carregando estados do IBGE..." else "Escolha o estado",!loadingStates&&states.isNotEmpty()){choice->state=choice.substringBefore(" - ");city="";citySelected=false;district="";districtSelected=false;street="";streetSelected=false;number="";clearCoords()}
-        Typeahead("Cidade",city,state.isNotBlank(),citySelected,cityLoading,cityOptions,"Cidades possíveis",onChange={city=it;citySelected=false;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={city=it;citySelected=true;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},allowTypedFallback=true)
-        Typeahead("Bairro",district,citySelected,districtSelected,districtLoading,districtOptions,"Bairros possíveis",onChange={district=it;districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={district=it;districtSelected=true;street="";streetSelected=false;clearCoords()},allowTypedFallback=true)
-        Typeahead("Rua",street,citySelected,streetSelected,streetLoading,streetOptions,"Ruas possíveis",onChange={street=it;streetSelected=false;clearCoords()},onPick={street=it;streetSelected=true;clearCoords()},allowTypedFallback=true)
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.width(92.dp)) {
+                CompactSelector("UF",state,states.map{"${it.uf} - ${it.name}"},if(loadingStates)"..." else "UF",!loadingStates&&states.isNotEmpty()){choice->state=choice.substringBefore(" - ");city="";citySelected=false;district="";districtSelected=false;street="";streetSelected=false;number="";clearCoords()}
+            }
+            Box(Modifier.weight(1f)) {
+                Typeahead("Cidade",city,state.isNotBlank(),citySelected,cityLoading,cityOptions,"Cidades possíveis",onChange={city=it;citySelected=false;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={city=it;citySelected=true;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true)
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) {
+                Typeahead("Bairro",district,citySelected,districtSelected,districtLoading,districtOptions,"Bairros possíveis",onChange={district=it;districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={district=it;districtSelected=true;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true)
+            }
+            Box(Modifier.weight(1.25f)) {
+                Typeahead("Rua",street,citySelected,streetSelected,streetLoading,streetOptions,"Ruas possíveis",onChange={street=it;streetSelected=false;clearCoords()},onPick={street=it;streetSelected=true;clearCoords()},allowTypedFallback=true,compact=true)
+            }
+        }
+
         OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.fillMaxWidth(),enabled=streetSelected,label={Text("Número")},singleLine=true)
         Button(onClick={if(state.isBlank()||!citySelected||!streetSelected)status="Escolha Estado, Cidade e Rua." else geocode(context,fields().query()){r->r.fold({apply(it);status="Endereço encontrado."},{status="Não encontrei esse endereço."})}},modifier=Modifier.fillMaxWidth()){Text("Buscar endereço")}
         Button(onClick={when{!hasFine()->locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION));!locationEnabled()->context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));else->{val token=CancellationTokenSource();locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,token.token).addOnSuccessListener{l->if(l==null)status="Não foi possível obter sua localização." else reverse(context,l.latitude,l.longitude){r->if(r!=null)apply(r.copy(lat=l.latitude,lon=l.longitude))else{lat=l.latitude;lon=l.longitude;selectedAddress="Minha localização atual"};if(name.isBlank())name="Local atual";status="Localização atual selecionada."}}}}},modifier=Modifier.fillMaxWidth()){Text("Usar minha localização atual")}
@@ -148,8 +164,16 @@ private fun AppScreen() {
 }
 
 @Composable
-private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false){
-    OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),enabled=enabled,label={Text(label)},supportingText={Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1..2->"Digite pelo menos 3 letras";else->"Digite as primeiras letras e escolha abaixo"})},singleLine=true)
+private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false,compact:Boolean=false){
+    OutlinedTextField(
+        value,
+        onChange,
+        Modifier.fillMaxWidth(),
+        enabled=enabled,
+        label={Text(label)},
+        supportingText=if(compact) null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1..2->"Digite pelo menos 3 letras";else->"Digite as primeiras letras e escolha abaixo"})}},
+        singleLine=true
+    )
     if(enabled&&!selected&&value.trim().length>=3) Card(Modifier.fillMaxWidth()){
         Column{
             Text(title,style=MaterialTheme.typography.titleSmall,modifier=Modifier.padding(10.dp))
@@ -165,7 +189,17 @@ private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean
     }
 }
 
-@Composable private fun CompactSelector(label:String,selected:String,options:List<String>,placeholder:String,enabled:Boolean,onSelect:(String)->Unit){var expanded by remember{mutableStateOf(false)};Column{Text(label,style=MaterialTheme.typography.labelMedium);Box(Modifier.fillMaxWidth()){OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth(),enabled=enabled){Text(selected.ifBlank{placeholder})};DropdownMenu(expanded,{expanded=false}){options.forEach{o->DropdownMenuItem(text={Text(o)},onClick={expanded=false;onSelect(o)})}}}}}
+@Composable
+private fun CompactSelector(label:String,selected:String,options:List<String>,placeholder:String,enabled:Boolean,onSelect:(String)->Unit){
+    var expanded by remember{mutableStateOf(false)}
+    Column{
+        Text(label,style=MaterialTheme.typography.labelMedium)
+        Box(Modifier.fillMaxWidth()){
+            OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth(),enabled=enabled){Text(selected.ifBlank{placeholder})}
+            DropdownMenu(expanded,{expanded=false}){options.forEach{o->DropdownMenuItem(text={Text(o)},onClick={expanded=false;onSelect(o)})}}
+        }
+    }
+}
 
 private fun parse(a:String):Fields{val p=a.split(" - ").map{it.trim()};val s=p.getOrNull(0)?.split(",")?.map{it.trim()}.orEmpty();return Fields(s.getOrNull(0).orEmpty(),s.getOrNull(1).orEmpty(),p.getOrNull(1).orEmpty(),p.getOrNull(2).orEmpty(),p.getOrNull(3).orEmpty().take(2).uppercase(Locale.ROOT))}
 private suspend fun ibgeStates(): List<StateItem> = withContext(Dispatchers.IO){val c=URL("https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome").openConnection() as HttpURLConnection;try{c.connectTimeout=8000;c.readTimeout=8000;if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val a=JSONArray(c.inputStream.bufferedReader().use{it.readText()});buildList{for(i in 0 until a.length()){val o=a.optJSONObject(i)?:continue;val uf=o.optString("sigla");val n=o.optString("nome");if(uf.isNotBlank()&&n.isNotBlank())add(StateItem(uf,n))}}}finally{c.disconnect()}}
