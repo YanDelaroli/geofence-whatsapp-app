@@ -3,6 +3,7 @@ package com.yandelaroli.geofencewhatsapp
 data class GeofenceRule(
     val id: String,
     val name: String,
+    val address: String,
     val latitude: Double,
     val longitude: Double,
     val radiusMeters: Float,
