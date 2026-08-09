@@ -74,6 +74,8 @@ class MainActivityV2 : ComponentActivity() {
     }
 }
 
+private data class IbgeState(val id: Int, val uf: String, val name: String)
+
 private data class AddressFieldsV2(
     val street: String = "",
     val number: String = "",
@@ -112,22 +114,23 @@ private fun GeofenceScreenV2() {
     var rules by remember { mutableStateOf(store.load()) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
 
+    var states by remember { mutableStateOf<List<IbgeState>>(emptyList()) }
+    var loadingStates by remember { mutableStateOf(true) }
     var state by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
-    var district by remember { mutableStateOf("") }
-    var street by remember { mutableStateOf("") }
-    var number by remember { mutableStateOf("") }
-
-    var cities by remember { mutableStateOf<List<String>>(emptyList()) }
-    var districts by remember { mutableStateOf<List<String>>(emptyList()) }
+    var citySelected by remember { mutableStateOf(false) }
+    var citySuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var loadingCities by remember { mutableStateOf(false) }
+    var district by remember { mutableStateOf("") }
+    var districts by remember { mutableStateOf<List<String>>(emptyList()) }
     var loadingDistricts by remember { mutableStateOf(false) }
     var customDistrictMode by remember { mutableStateOf(false) }
+    var street by remember { mutableStateOf("") }
+    var number by remember { mutableStateOf("") }
 
     var suggestions by remember { mutableStateOf<List<AddressSuggestionV2>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var suggestionError by remember { mutableStateOf(false) }
-
     var selectedAddress by remember { mutableStateOf("") }
     var selectedLatitude by remember { mutableStateOf<Double?>(null) }
     var selectedLongitude by remember { mutableStateOf<Double?>(null) }
@@ -136,7 +139,7 @@ private fun GeofenceScreenV2() {
     var radius by remember { mutableStateOf(150f) }
     var phone by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("Estou chegando.") }
-    var status by remember { mutableStateOf("Selecione Estado, Cidade e Bairro para começar.") }
+    var status by remember { mutableStateOf("Escolha o estado e digite a cidade.") }
 
     var showAlwaysLocationDialog by remember { mutableStateOf(false) }
     var startupPermissionsRequested by remember { mutableStateOf(false) }
@@ -152,8 +155,8 @@ private fun GeofenceScreenV2() {
     }
     fun clearForm() {
         editingRuleId = null
-        state = ""; city = ""; district = ""; street = ""; number = ""
-        cities = emptyList(); districts = emptyList(); customDistrictMode = false
+        state = ""; city = ""; citySelected = false; district = ""; street = ""; number = ""
+        citySuggestions = emptyList(); districts = emptyList(); customDistrictMode = false
         suggestions = emptyList(); suggestionError = false
         clearAddressSelection()
         name = ""; radius = 150f; phone = ""; message = "Estou chegando."
@@ -179,6 +182,7 @@ private fun GeofenceScreenV2() {
     fun applySuggestion(suggestion: AddressSuggestionV2) {
         state = suggestion.fields.state.ifBlank { state }
         city = suggestion.fields.city.ifBlank { city }
+        citySelected = city.isNotBlank()
         district = suggestion.fields.district.ifBlank { district }
         street = suggestion.fields.street.ifBlank { street }
         number = suggestion.fields.number.ifBlank { number }
@@ -194,6 +198,7 @@ private fun GeofenceScreenV2() {
         editingRuleId = rule.id
         state = parsed.state
         city = parsed.city
+        citySelected = city.isNotBlank()
         district = parsed.district
         street = parsed.street
         number = parsed.number
@@ -232,32 +237,37 @@ private fun GeofenceScreenV2() {
             startupPermissionsRequested = true
             requestInitialPermissions()
         }
+        loadingStates = true
+        states = runCatching { fetchIbgeStates() }.getOrElse { emptyList() }
+        loadingStates = false
     }
 
-    LaunchedEffect(state) {
-        if (state.isBlank()) {
-            cities = emptyList()
+    LaunchedEffect(city, state, citySelected) {
+        val typed = city.trim()
+        if (state.isBlank() || citySelected || typed.length < 3) {
+            citySuggestions = emptyList()
+            loadingCities = false
             return@LaunchedEffect
         }
+        delay(400)
         loadingCities = true
-        val result = runCatching { fetchIbgeCities(state) }
-        cities = result.getOrElse { emptyList() }
+        citySuggestions = runCatching { searchCitySuggestions(typed, state) }.getOrElse { emptyList() }
         loadingCities = false
     }
 
-    LaunchedEffect(city, state) {
-        if (city.isBlank() || state.isBlank()) {
+    LaunchedEffect(city, state, citySelected) {
+        if (!citySelected || city.isBlank() || state.isBlank()) {
             districts = emptyList()
+            loadingDistricts = false
             return@LaunchedEffect
         }
         loadingDistricts = true
-        val result = runCatching { fetchDistrictSuggestions(city, state) }
-        districts = result.getOrElse { emptyList() }
+        districts = runCatching { fetchDistrictSuggestions(city, state) }.getOrElse { emptyList() }
         loadingDistricts = false
     }
 
-    LaunchedEffect(street, number, district, city, state) {
-        if (state.isBlank() || city.isBlank() || street.trim().length < 3) {
+    LaunchedEffect(street, number, district, city, state, citySelected) {
+        if (state.isBlank() || !citySelected || street.trim().length < 3) {
             suggestions = emptyList(); searching = false; suggestionError = false
             return@LaunchedEffect
         }
@@ -315,46 +325,86 @@ private fun GeofenceScreenV2() {
         CompactSelector(
             label = "Estado",
             selected = state,
-            options = BRAZIL_STATES_V2.map { "${it.first} - ${it.second}" },
-            placeholder = "Escolha o estado"
+            options = states.map { "${it.uf} - ${it.name}" },
+            placeholder = if (loadingStates) "Carregando estados do IBGE..." else "Escolha o estado",
+            enabled = !loadingStates && states.isNotEmpty()
         ) { choice ->
-            val uf = choice.substringBefore(" - ")
-            state = uf
+            state = choice.substringBefore(" - ")
             city = ""
+            citySelected = false
+            citySuggestions = emptyList()
             district = ""
+            districts = emptyList()
             customDistrictMode = false
             clearAddressSelection()
         }
 
-        CompactSelector(
-            label = "Cidade",
-            selected = city,
-            options = cities,
-            placeholder = when {
-                state.isBlank() -> "Escolha o estado primeiro"
-                loadingCities -> "Carregando cidades..."
-                else -> "Escolha a cidade"
+        OutlinedTextField(
+            value = city,
+            onValueChange = {
+                city = it
+                citySelected = false
+                district = ""
+                districts = emptyList()
+                customDistrictMode = false
+                clearAddressSelection()
             },
-            enabled = state.isNotBlank() && !loadingCities
-        ) { choice ->
-            city = choice
-            district = ""
-            customDistrictMode = false
-            clearAddressSelection()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.isNotBlank(),
+            label = { Text("Cidade") },
+            supportingText = {
+                Text(
+                    when {
+                        state.isBlank() -> "Escolha o estado primeiro"
+                        citySelected -> "Cidade selecionada"
+                        loadingCities -> "Buscando cidades..."
+                        city.trim().length in 1..2 -> "Digite pelo menos 3 letras"
+                        else -> "Digite as primeiras letras e escolha uma opção abaixo"
+                    }
+                )
+            },
+            singleLine = true
+        )
+
+        if (state.isNotBlank() && !citySelected && city.trim().length >= 3) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Cidades possíveis", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(10.dp))
+                    when {
+                        loadingCities -> Text("Buscando...", modifier = Modifier.padding(10.dp))
+                        citySuggestions.isEmpty() -> Text("Nenhuma cidade encontrada. Digite mais letras.", modifier = Modifier.padding(10.dp))
+                        else -> citySuggestions.forEachIndexed { index, option ->
+                            TextButton(
+                                onClick = {
+                                    city = option
+                                    citySelected = true
+                                    citySuggestions = emptyList()
+                                    district = ""
+                                    districts = emptyList()
+                                    customDistrictMode = false
+                                    clearAddressSelection()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(option, modifier = Modifier.fillMaxWidth()) }
+                            if (index != citySuggestions.lastIndex) HorizontalDivider()
+                        }
+                    }
+                }
+            }
         }
 
         if (!customDistrictMode) {
             CompactSelector(
                 label = "Bairro",
                 selected = district,
-                options = districts + listOf("Outro bairro...") ,
+                options = districts + if (citySelected) listOf("Outro bairro...") else emptyList(),
                 placeholder = when {
-                    city.isBlank() -> "Escolha a cidade primeiro"
+                    !citySelected -> "Escolha a cidade primeiro"
                     loadingDistricts -> "Carregando bairros..."
-                    districts.isEmpty() -> "Nenhum bairro listado"
+                    districts.isEmpty() -> "Escolha 'Outro bairro...' se necessário"
                     else -> "Escolha o bairro"
                 },
-                enabled = city.isNotBlank() && !loadingDistricts
+                enabled = citySelected && !loadingDistricts
             ) { choice ->
                 if (choice == "Outro bairro...") {
                     district = ""
@@ -368,7 +418,7 @@ private fun GeofenceScreenV2() {
                 onValueChange = { district = it; clearAddressSelection() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Bairro") },
-                supportingText = { Text("Digite apenas se o bairro não apareceu na lista") },
+                supportingText = { Text("Digite o bairro se ele não apareceu na lista") },
                 singleLine = true
             )
             TextButton(onClick = { customDistrictMode = false; district = "" }) { Text("Voltar para lista de bairros") }
@@ -379,6 +429,7 @@ private fun GeofenceScreenV2() {
                 value = street,
                 onValueChange = { street = it; clearAddressSelection() },
                 modifier = Modifier.weight(1f),
+                enabled = citySelected,
                 label = { Text("Rua") },
                 singleLine = true
             )
@@ -386,13 +437,14 @@ private fun GeofenceScreenV2() {
                 value = number,
                 onValueChange = { number = it.take(10); clearAddressSelection() },
                 modifier = Modifier.weight(0.45f),
+                enabled = citySelected,
                 label = { Text("Nº") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 singleLine = true
             )
         }
 
-        if (street.trim().length >= 3 && city.isNotBlank() && state.isNotBlank() && selectedLatitude == null) {
+        if (street.trim().length >= 3 && citySelected && selectedLatitude == null) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Endereços possíveis", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(10.dp))
@@ -412,13 +464,12 @@ private fun GeofenceScreenV2() {
                     }
                 }
             }
-            Text("Endereços: Photon / OpenStreetMap", style = MaterialTheme.typography.bodySmall)
         }
 
         Button(
             onClick = {
-                if (state.isBlank() || city.isBlank() || street.isBlank()) {
-                    status = "Selecione Estado e Cidade e informe a Rua."
+                if (state.isBlank() || !citySelected || street.isBlank()) {
+                    status = "Escolha Estado e Cidade e informe a Rua."
                 } else {
                     status = "Buscando endereço..."
                     geocodeAddressV2(context, fields().query()) { result ->
@@ -575,17 +626,12 @@ private fun CompactSelector(
                 onClick = { if (enabled) expanded = true },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = enabled
-            ) {
-                Text(selected.ifBlank { placeholder })
-            }
+            ) { Text(selected.ifBlank { placeholder }) }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.distinct().filter { it.isNotBlank() }.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option) },
-                        onClick = {
-                            expanded = false
-                            onSelect(option)
-                        }
+                        onClick = { expanded = false; onSelect(option) }
                     )
                 }
             }
@@ -605,8 +651,8 @@ private fun parseStoredAddressV2(address: String): AddressFieldsV2 {
     )
 }
 
-private suspend fun fetchIbgeCities(uf: String): List<String> = withContext(Dispatchers.IO) {
-    val url = URL("https://servicodados.ibge.gov.br/api/v1/localidades/estados/${URLEncoder.encode(uf, "UTF-8")}/municipios?orderBy=nome")
+private suspend fun fetchIbgeStates(): List<IbgeState> = withContext(Dispatchers.IO) {
+    val url = URL("https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome")
     val connection = (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"; connectTimeout = 8000; readTimeout = 8000
         setRequestProperty("Accept", "application/json")
@@ -616,19 +662,22 @@ private suspend fun fetchIbgeCities(uf: String): List<String> = withContext(Disp
         val array = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
         buildList {
             for (i in 0 until array.length()) {
-                val name = array.optJSONObject(i)?.optString("nome").orEmpty()
-                if (name.isNotBlank()) add(name)
+                val item = array.optJSONObject(i) ?: continue
+                val id = item.optInt("id")
+                val uf = item.optString("sigla")
+                val name = item.optString("nome")
+                if (uf.isNotBlank() && name.isNotBlank()) add(IbgeState(id, uf, name))
             }
         }
     } finally { connection.disconnect() }
 }
 
-private suspend fun fetchDistrictSuggestions(city: String, state: String): List<String> = withContext(Dispatchers.IO) {
-    val query = URLEncoder.encode("$city, $state, Brasil", "UTF-8")
-    val url = URL("https://photon.komoot.io/api/?q=$query&limit=50&lang=pt")
+private suspend fun searchCitySuggestions(typed: String, state: String): List<String> = withContext(Dispatchers.IO) {
+    val encoded = URLEncoder.encode("$typed, $state, Brasil", "UTF-8")
+    val url = URL("https://photon.komoot.io/api/?q=$encoded&limit=12&lang=pt&countrycode=BR&layer=city&layer=locality")
     val connection = (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"; connectTimeout = 7000; readTimeout = 7000
-        setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.8")
+        setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.9")
         setRequestProperty("Accept", "application/json")
     }
     try {
@@ -638,6 +687,34 @@ private suspend fun fetchDistrictSuggestions(city: String, state: String): List<
         buildSet {
             for (i in 0 until features.length()) {
                 val p = features.optJSONObject(i)?.optJSONObject("properties") ?: continue
+                val resultState = normalizeStateV2(p.optString("state"))
+                if (resultState.isNotBlank() && !resultState.equals(state, true)) continue
+                val candidate = p.optString("city")
+                    .ifBlank { p.optString("name") }
+                    .ifBlank { p.optString("locality") }
+                if (candidate.isNotBlank() && candidate.startsWith(typed, ignoreCase = true)) add(candidate)
+            }
+        }.toList().sorted()
+    } finally { connection.disconnect() }
+}
+
+private suspend fun fetchDistrictSuggestions(city: String, state: String): List<String> = withContext(Dispatchers.IO) {
+    val query = URLEncoder.encode("$city, $state, Brasil", "UTF-8")
+    val url = URL("https://photon.komoot.io/api/?q=$query&limit=50&lang=pt&countrycode=BR&layer=district&layer=locality")
+    val connection = (url.openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"; connectTimeout = 7000; readTimeout = 7000
+        setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.9")
+        setRequestProperty("Accept", "application/json")
+    }
+    try {
+        if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
+        val body = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+        val features = body.optJSONArray("features") ?: return@withContext emptyList()
+        buildSet {
+            for (i in 0 until features.length()) {
+                val p = features.optJSONObject(i)?.optJSONObject("properties") ?: continue
+                val resultState = normalizeStateV2(p.optString("state"))
+                if (resultState.isNotBlank() && !resultState.equals(state, true)) continue
                 val featureCity = p.optString("city").ifBlank { p.optString("county") }
                 if (featureCity.isNotBlank() && !featureCity.equals(city, true)) continue
                 listOf(p.optString("district"), p.optString("locality"), p.optString("name"))
@@ -650,10 +727,10 @@ private suspend fun fetchDistrictSuggestions(city: String, state: String): List<
 
 private suspend fun searchPhotonAddressesV2(query: String): List<AddressSuggestionV2> = withContext(Dispatchers.IO) {
     val encoded = URLEncoder.encode(query, "UTF-8")
-    val url = URL("https://photon.komoot.io/api/?q=$encoded&limit=8&lang=pt&lat=-14.235&lon=-51.9253")
+    val url = URL("https://photon.komoot.io/api/?q=$encoded&limit=8&lang=pt&countrycode=BR")
     val connection = (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"; connectTimeout = 7000; readTimeout = 7000
-        setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.8")
+        setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.9")
         setRequestProperty("Accept", "application/json")
     }
     try {
@@ -664,8 +741,6 @@ private suspend fun searchPhotonAddressesV2(query: String): List<AddressSuggesti
             for (i in 0 until features.length()) {
                 val feature = features.optJSONObject(i) ?: continue
                 val p = feature.optJSONObject("properties") ?: JSONObject()
-                val cc = p.optString("countrycode").lowercase(Locale.ROOT)
-                if (cc.isNotBlank() && cc != "br") continue
                 val coords = feature.optJSONObject("geometry")?.optJSONArray("coordinates") ?: continue
                 val lon = coords.optDouble(0, Double.NaN)
                 val lat = coords.optDouble(1, Double.NaN)
@@ -732,15 +807,15 @@ private fun Address.toSuggestionV2(fallback: String): AddressSuggestionV2 {
 private fun normalizeStateV2(value: String): String {
     val clean = value.trim()
     if (clean.length == 2) return clean.uppercase(Locale.ROOT)
-    return BRAZIL_STATES_V2.firstOrNull { it.second.equals(clean, true) }?.first ?: clean.take(2).uppercase(Locale.ROOT)
+    return STATE_NAME_TO_UF[clean.lowercase(Locale.ROOT)] ?: ""
 }
 
-private val BRAZIL_STATES_V2 = listOf(
-    "AC" to "Acre", "AL" to "Alagoas", "AP" to "Amapá", "AM" to "Amazonas", "BA" to "Bahia",
-    "CE" to "Ceará", "DF" to "Distrito Federal", "ES" to "Espírito Santo", "GO" to "Goiás",
-    "MA" to "Maranhão", "MT" to "Mato Grosso", "MS" to "Mato Grosso do Sul", "MG" to "Minas Gerais",
-    "PA" to "Pará", "PB" to "Paraíba", "PR" to "Paraná", "PE" to "Pernambuco", "PI" to "Piauí",
-    "RJ" to "Rio de Janeiro", "RN" to "Rio Grande do Norte", "RS" to "Rio Grande do Sul",
-    "RO" to "Rondônia", "RR" to "Roraima", "SC" to "Santa Catarina", "SP" to "São Paulo",
-    "SE" to "Sergipe", "TO" to "Tocantins"
+private val STATE_NAME_TO_UF = mapOf(
+    "acre" to "AC", "alagoas" to "AL", "amapá" to "AP", "amazonas" to "AM", "bahia" to "BA",
+    "ceará" to "CE", "distrito federal" to "DF", "espírito santo" to "ES", "goiás" to "GO",
+    "maranhão" to "MA", "mato grosso" to "MT", "mato grosso do sul" to "MS", "minas gerais" to "MG",
+    "pará" to "PA", "paraíba" to "PB", "paraná" to "PR", "pernambuco" to "PE", "piauí" to "PI",
+    "rio de janeiro" to "RJ", "rio grande do norte" to "RN", "rio grande do sul" to "RS",
+    "rondônia" to "RO", "roraima" to "RR", "santa catarina" to "SC", "são paulo" to "SP",
+    "sergipe" to "SE", "tocantins" to "TO"
 )
