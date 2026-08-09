@@ -1,11 +1,15 @@
 package com.yandelaroli.geofencewhatsapp
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,13 +43,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.Circle
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import java.util.Locale
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -64,18 +65,18 @@ private fun GeofenceScreen() {
     val context = LocalContext.current
     val store = remember { RuleStore(context) }
     val geofenceManager = remember { GeofenceManager(context) }
+    val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var rules by remember { mutableStateOf(store.load()) }
-    var selectedPoint by remember { mutableStateOf<LatLng?>(null) }
+    var addressQuery by remember { mutableStateOf("") }
+    var selectedAddress by remember { mutableStateOf("") }
+    var selectedLatitude by remember { mutableStateOf<Double?>(null) }
+    var selectedLongitude by remember { mutableStateOf<Double?>(null) }
     var name by remember { mutableStateOf("") }
     var radius by remember { mutableStateOf(150f) }
     var phone by remember { mutableStateOf("55") }
     var message by remember { mutableStateOf("Estou chegando.") }
-    var status by remember { mutableStateOf("Toque no mapa para escolher um local.") }
-
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(-14.2350, -51.9253), 3.5f)
-    }
+    var status by remember { mutableStateOf("Digite um CEP/endereço ou use sua localização atual.") }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -112,36 +113,94 @@ private fun GeofenceScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Mensagem por localização", style = MaterialTheme.typography.headlineSmall)
-        Text("Toque no mapa, escolha o raio e salve quantos locais quiser.")
+        Text("Cadastre um local usando CEP, endereço completo ou sua localização atual.")
 
-        GoogleMap(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(330.dp),
-            cameraPositionState = cameraPositionState,
-            onMapClick = {
-                selectedPoint = it
-                status = "Local escolhido. Ajuste os dados e salve."
-            }
+        OutlinedTextField(
+            value = addressQuery,
+            onValueChange = { addressQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("CEP ou endereço") },
+            supportingText = { Text("Ex.: 20040-020 ou Av. Rio Branco, 1, Rio de Janeiro") },
+            singleLine = false
+        )
+
+        Button(
+            onClick = {
+                if (addressQuery.isBlank()) {
+                    status = "Digite um CEP ou endereço."
+                } else {
+                    status = "Buscando endereço..."
+                    geocodeAddress(context, addressQuery) { result ->
+                        result.fold(
+                            onSuccess = { found ->
+                                selectedLatitude = found.latitude
+                                selectedLongitude = found.longitude
+                                selectedAddress = found.label
+                                status = "Local encontrado: ${found.label}"
+                                if (name.isBlank()) name = found.shortName
+                            },
+                            onFailure = {
+                                status = "Não encontrei esse endereço. Tente informar rua, número, cidade e estado."
+                            }
+                        )
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            selectedPoint?.let { point ->
-                Marker(
-                    state = MarkerState(position = point),
-                    title = name.ifBlank { "Novo local" }
-                )
-                Circle(
-                    center = point,
-                    radius = radius.toDouble()
-                )
-            }
+            Text("Buscar CEP/endereço")
+        }
 
-            rules.filter { it.enabled }.forEach { rule ->
-                val point = LatLng(rule.latitude, rule.longitude)
-                Marker(
-                    state = MarkerState(position = point),
-                    title = rule.name
-                )
-                Circle(center = point, radius = rule.radiusMeters.toDouble())
+        Button(
+            onClick = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    status = "Autorize a localização antes de usar sua posição atual."
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                } else {
+                    status = "Obtendo sua localização..."
+                    val tokenSource = CancellationTokenSource()
+                    try {
+                        locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, tokenSource.token)
+                            .addOnSuccessListener { location ->
+                                if (location == null) {
+                                    status = "Não foi possível obter sua localização. Ative o GPS e tente novamente."
+                                } else {
+                                    selectedLatitude = location.latitude
+                                    selectedLongitude = location.longitude
+                                    reverseGeocode(context, location.latitude, location.longitude) { label ->
+                                        selectedAddress = label ?: "Minha localização atual"
+                                        if (name.isBlank()) name = "Local atual"
+                                        status = "Localização atual selecionada."
+                                    }
+                                }
+                            }
+                            .addOnFailureListener {
+                                status = "Erro ao obter localização: ${it.message ?: "erro desconhecido"}"
+                            }
+                    } catch (securityException: SecurityException) {
+                        status = "Permissão de localização não concedida."
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Usar minha localização atual")
+        }
+
+        if (selectedLatitude != null && selectedLongitude != null) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Local selecionado", style = MaterialTheme.typography.titleMedium)
+                    Text(selectedAddress.ifBlank { "Coordenadas obtidas" })
+                }
             }
         }
 
@@ -213,13 +272,14 @@ private fun GeofenceScreen() {
 
         Button(
             onClick = {
-                val point = selectedPoint
+                val lat = selectedLatitude
+                val lon = selectedLongitude
                 val cleanPhone = phone.filter(Char::isDigit)
                 when {
                     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED -> {
                         status = "Autorize a localização primeiro."
                     }
-                    point == null -> status = "Toque no mapa para escolher o local."
+                    lat == null || lon == null -> status = "Busque um endereço ou use sua localização atual."
                     name.isBlank() -> status = "Dê um nome ao local."
                     cleanPhone.length < 10 -> status = "Informe um WhatsApp válido com DDI e DDD."
                     message.isBlank() -> status = "Digite a mensagem."
@@ -228,14 +288,18 @@ private fun GeofenceScreen() {
                         val newRule = GeofenceRule(
                             id = UUID.randomUUID().toString(),
                             name = name.trim(),
-                            latitude = point.latitude,
-                            longitude = point.longitude,
+                            address = selectedAddress.ifBlank { addressQuery.trim() },
+                            latitude = lat,
+                            longitude = lon,
                             radiusMeters = radius,
                             phone = cleanPhone,
                             message = message.trim()
                         )
                         persistAndRegister(rules + newRule)
-                        selectedPoint = null
+                        addressQuery = ""
+                        selectedAddress = ""
+                        selectedLatitude = null
+                        selectedLongitude = null
                         name = ""
                     }
                 }
@@ -259,6 +323,7 @@ private fun GeofenceScreen() {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(rule.name, style = MaterialTheme.typography.titleMedium)
+                    Text(rule.address)
                     Text("Raio: ${rule.radiusMeters.toInt()} m • WhatsApp: ${rule.phone}")
                     Text(rule.message)
                     Row(
@@ -289,5 +354,59 @@ private fun GeofenceScreen() {
                 }
             }
         }
+    }
+}
+
+private data class FoundAddress(
+    val latitude: Double,
+    val longitude: Double,
+    val label: String,
+    val shortName: String
+)
+
+private fun geocodeAddress(context: Context, query: String, callback: (Result<FoundAddress>) -> Unit) {
+    val geocoder = Geocoder(context, Locale("pt", "BR"))
+
+    fun deliver(address: android.location.Address?) {
+        if (address == null) {
+            callback(Result.failure(IllegalArgumentException("Endereço não encontrado")))
+            return
+        }
+        val label = address.getAddressLine(0)
+            ?: listOfNotNull(address.thoroughfare, address.subThoroughfare, address.locality, address.adminArea)
+                .joinToString(", ")
+                .ifBlank { query }
+        val shortName = address.thoroughfare ?: address.featureName ?: address.locality ?: "Local"
+        callback(Result.success(FoundAddress(address.latitude, address.longitude, label, shortName)))
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        geocoder.getFromLocationName(query, 1) { addresses ->
+            deliver(addresses.firstOrNull())
+        }
+    } else {
+        Thread {
+            val result = runCatching { geocoder.getFromLocationName(query, 1)?.firstOrNull() }.getOrNull()
+            Handler(Looper.getMainLooper()).post { deliver(result) }
+        }.start()
+    }
+}
+
+private fun reverseGeocode(context: Context, latitude: Double, longitude: Double, callback: (String?) -> Unit) {
+    val geocoder = Geocoder(context, Locale("pt", "BR"))
+
+    fun deliver(address: android.location.Address?) {
+        callback(address?.getAddressLine(0))
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        geocoder.getFromLocation(latitude, longitude, 1) { addresses ->
+            deliver(addresses.firstOrNull())
+        }
+    } else {
+        Thread {
+            val result = runCatching { geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull() }.getOrNull()
+            Handler(Looper.getMainLooper()).post { deliver(result) }
+        }.start()
     }
 }
