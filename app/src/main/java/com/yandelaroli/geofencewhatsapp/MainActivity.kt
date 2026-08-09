@@ -76,6 +76,9 @@ private fun GeofenceScreen() {
     val store = remember { RuleStore(context) }
     val geofenceManager = remember { GeofenceManager(context) }
     val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val onboardingPrefs = remember {
+        context.getSharedPreferences("onboarding_preferences", Context.MODE_PRIVATE)
+    }
 
     var rules by remember { mutableStateOf(store.load()) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
@@ -94,6 +97,9 @@ private fun GeofenceScreen() {
     var status by remember { mutableStateOf("Digite um endereço ou CEP.") }
     var showAlwaysLocationDialog by remember { mutableStateOf(false) }
     var startupPermissionsRequested by remember { mutableStateOf(false) }
+    var showFirstRunPermissionDialog by remember {
+        mutableStateOf(!onboardingPrefs.getBoolean("permission_intro_shown", false))
+    }
 
     fun hasFineLocation() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -171,7 +177,7 @@ private fun GeofenceScreen() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-            status = "Localização autorizada. Permita também localização o tempo todo."
+            status = "Localização autorizada."
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation()) {
                 showAlwaysLocationDialog = true
             }
@@ -185,18 +191,22 @@ private fun GeofenceScreen() {
         }
     }
 
+    fun requestInitialPermissions() {
+        when {
+            !hasFineLocation() -> locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation() -> showAlwaysLocationDialog = true
+            Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     LaunchedEffect(Unit) {
-        if (!startupPermissionsRequested) {
+        if (!startupPermissionsRequested && !showFirstRunPermissionDialog) {
             startupPermissionsRequested = true
-            when {
-                !hasFineLocation() -> locationPermissionLauncher.launch(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                )
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation() -> showAlwaysLocationDialog = true
-                Build.VERSION.SDK_INT >= 33 &&
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            requestInitialPermissions()
         }
     }
 
@@ -229,6 +239,29 @@ private fun GeofenceScreen() {
         status = "Endereço selecionado."
     }
 
+    if (showFirstRunPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Permissões de localização") },
+            text = {
+                Text(
+                    "Para detectar sua chegada mesmo com o aplicativo fechado, mantenha a localização do celular ligada e permita acesso à localização o tempo todo. " +
+                        "O Android também poderá pedir permissão para notificações. Este aviso aparece somente na primeira vez após instalar o aplicativo."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onboardingPrefs.edit().putBoolean("permission_intro_shown", true).apply()
+                        showFirstRunPermissionDialog = false
+                        startupPermissionsRequested = true
+                        requestInitialPermissions()
+                    }
+                ) { Text("Continuar") }
+            }
+        )
+    }
+
     if (showAlwaysLocationDialog) {
         AlertDialog(
             onDismissRequest = { showAlwaysLocationDialog = false },
@@ -258,33 +291,6 @@ private fun GeofenceScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Mensagem por localização", style = MaterialTheme.typography.headlineSmall)
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Permissões necessárias", style = MaterialTheme.typography.titleMedium)
-                Text("Mantenha a localização ligada e permita acesso à localização o tempo todo.")
-                Text(
-                    when {
-                        !hasFineLocation() -> "Status: localização não autorizada."
-                        !hasBackgroundLocation() -> "Status: falta permitir localização o tempo todo."
-                        !isLocationEnabled() -> "Status: localização do aparelho desligada."
-                        else -> "Status: pronto para geofencing."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (!isLocationEnabled()) {
-                    Button(
-                        onClick = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Ligar localização") }
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation()) {
-                    Button(onClick = { showAlwaysLocationDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Permitir localização o tempo todo")
-                    }
-                }
-            }
-        }
 
         if (editingRuleId != null) {
             Card(modifier = Modifier.fillMaxWidth()) {
