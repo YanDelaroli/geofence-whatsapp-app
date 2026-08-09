@@ -16,7 +16,7 @@
         android:theme="@style/Theme.GeofenceWhatsApp">
 
         <activity
-            android:name=".MainActivityV2"
+            android:name=".MainActivityV3"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
