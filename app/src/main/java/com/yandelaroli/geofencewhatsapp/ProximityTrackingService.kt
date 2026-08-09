@@ -114,7 +114,7 @@ class ProximityTrackingService : Service() {
                 PendingIntent.getActivity(
                     this,
                     7001,
-                    Intent(this, MainActivityV2::class.java),
+                    Intent(this, MainActivityV3::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
@@ -135,13 +135,7 @@ class ProximityTrackingService : Service() {
 
     private fun distanceMeters(location: Location, rule: GeofenceRule): Float {
         val results = FloatArray(1)
-        Location.distanceBetween(
-            location.latitude,
-            location.longitude,
-            rule.latitude,
-            rule.longitude,
-            results
-        )
+        Location.distanceBetween(location.latitude, location.longitude, rule.latitude, rule.longitude, results)
         return results[0]
     }
 
