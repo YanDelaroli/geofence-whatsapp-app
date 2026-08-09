@@ -148,8 +148,8 @@ private fun AppScreen() {
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(82.dp).height(52.dp),enabled=streetSelected,label={Text("Nº")},singleLine=true)
-            Card(Modifier.weight(1f).height(52.dp)) { Column(Modifier.padding(horizontal=8.dp,vertical=5.dp),verticalArrangement=Arrangement.spacedBy(1.dp)){Text("Endereço completo",style=MaterialTheme.typography.labelSmall);Text(fields().display().ifBlank{"Preencha os campos acima."},style=MaterialTheme.typography.bodySmall,maxLines=2)} }
+            OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(82.dp).height(58.dp),enabled=streetSelected,label={Text("Nº")},singleLine=true)
+            Card(Modifier.weight(1f).height(58.dp)) { Column(Modifier.padding(horizontal=8.dp,vertical=6.dp),verticalArrangement=Arrangement.spacedBy(1.dp)){Text("Endereço completo",style=MaterialTheme.typography.labelSmall);Text(fields().display().ifBlank{"Preencha os campos acima."},style=MaterialTheme.typography.bodySmall,maxLines=2)} }
         }
 
         Button(onClick={if(state.isBlank()||!citySelected||!streetSelected)status="Escolha Estado, Cidade e Rua." else geocode(context,fields().query()){r->r.fold({apply(it);status="Endereço encontrado."},{status="Não encontrei esse endereço."})}},modifier=Modifier.fillMaxWidth()){Text("Buscar endereço")}
@@ -169,7 +169,7 @@ private fun AppScreen() {
 @Composable
 private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false,compact:Boolean=false,minChars:Int=3){
     Box(Modifier.fillMaxWidth()) {
-        OutlinedTextField(value,onChange,Modifier.fillMaxWidth().height(52.dp),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1 until minChars->"Digite pelo menos $minChars letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
+        OutlinedTextField(value,onChange,Modifier.fillMaxWidth().height(60.dp),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1 until minChars->"Digite pelo menos $minChars letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
         DropdownMenu(
             expanded=enabled&&!selected&&value.trim().length>=minChars,
             onDismissRequest={},
@@ -195,7 +195,7 @@ private fun CompactSelector(label:String,selected:String,options:List<String>,pl
     Column{
         Text(label,style=MaterialTheme.typography.labelSmall)
         Box(Modifier.fillMaxWidth()){
-            OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth().height(46.dp),enabled=enabled){Text(selected.ifBlank{placeholder})}
+            OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth().height(50.dp),enabled=enabled){Text(selected.ifBlank{placeholder})}
             DropdownMenu(expanded,{expanded=false}){options.forEach{o->DropdownMenuItem(text={Text(o)},onClick={expanded=false;onSelect(o)})}}
         }
     }
