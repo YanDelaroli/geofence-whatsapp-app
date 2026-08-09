@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.ContactsContract
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -116,6 +117,21 @@ private fun AppScreen() {
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if(!it) status="Ative notificações para receber o atalho do WhatsApp." }
     val locLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { g -> if(g[Manifest.permission.ACCESS_FINE_LOCATION]==true){ if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q&&!hasBackground())showAlways=true; if(Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } else status="A localização precisa é necessária." }
+    val contactLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data ?: return@rememberLauncherForActivityResult
+        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                if (index >= 0) {
+                    var digits = cursor.getString(index).orEmpty().filter(Char::isDigit)
+                    if (digits.startsWith("55") && digits.length > 11) digits = digits.drop(2)
+                    phone = digits.takeLast(11)
+                    status = "Contato selecionado."
+                }
+            }
+        }
+    }
     fun requestPermissions(){ when { !hasFine()->locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION)); Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q&&!hasBackground()->showAlways=true; Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED->notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } }
 
     LaunchedEffect(Unit){ if(!permissionsStarted&&!firstRun){permissionsStarted=true;requestPermissions()}; loadingStates=true; states=runCatching{ibgeStates()}.getOrElse{emptyList()}; loadingStates=false }
@@ -157,7 +173,13 @@ private fun AppScreen() {
         if(lat!=null&&lon!=null)Card(Modifier.fillMaxWidth()){Column(Modifier.padding(8.dp)){Text("Local selecionado");Text(selectedAddress.ifBlank{fields().display()})}}
         Text("Raio: ${radius.toInt()} m");Slider(radius,{radius=it},valueRange=50f..1000f,steps=18)
         OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Nome do local")},singleLine=true)
-        OutlinedTextField(phone,{raw->var d=raw.filter(Char::isDigit).take(13);if(d.startsWith("55")&&d.length>11)d=d.drop(2);phone=d.take(11)},Modifier.fillMaxWidth(),label={Text("WhatsApp (DDD + número)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),singleLine=true)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(phone,{raw->var d=raw.filter(Char::isDigit).take(13);if(d.startsWith("55")&&d.length>11)d=d.drop(2);phone=d.take(11)},Modifier.weight(1f),label={Text("WhatsApp (DDD + número)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),singleLine=true)
+            OutlinedButton(onClick={
+                val intent = Intent(Intent.ACTION_PICK).apply { type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE }
+                contactLauncher.launch(intent)
+            },modifier=Modifier.height(56.dp)){Text("Contato")}
+        }
         OutlinedTextField(message,{message=it},Modifier.fillMaxWidth(),label={Text("Mensagem")},minLines=3)
         Button(onClick={val la=lat;val lo=lon;val p=phone.filter(Char::isDigit);when{la==null||lo==null->status="Busque ou selecione um endereço.";name.isBlank()->status="Dê um nome ao local.";p.length !in 10..11->status="Informe um WhatsApp válido.";message.isBlank()->status="Digite a mensagem.";else->{val id=editId?:UUID.randomUUID().toString();val old=rules.firstOrNull{it.id==id};val rule=GeofenceRule(id,name.trim(),fields().display().ifBlank{selectedAddress},la,lo,radius,"55$p",message.trim(),old?.enabled?:true);if(editId==null)register(rules+rule,"Local salvo e ativado.")else register(rules.map{if(it.id==id)rule else it},"Alterações salvas.");clearForm()}}},modifier=Modifier.fillMaxWidth()){Text(if(editId==null)"Salvar e ativar este local" else "Salvar alterações")}
         Text(status)
