@@ -23,7 +23,8 @@ class RuleStore(context: Context) {
                         radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(),
                         phone = item.optString("phone"),
                         message = item.optString("message"),
-                        enabled = item.optBoolean("enabled", true)
+                        enabled = item.optBoolean("enabled", true),
+                        autoSendAuthorized = item.optBoolean("autoSendAuthorized", false)
                     )
                 )
             }
@@ -44,6 +45,7 @@ class RuleStore(context: Context) {
                     .put("phone", rule.phone)
                     .put("message", rule.message)
                     .put("enabled", rule.enabled)
+                    .put("autoSendAuthorized", rule.autoSendAuthorized)
             )
         }
         prefs.edit().putString(KEY_RULES, array.toString()).apply()
