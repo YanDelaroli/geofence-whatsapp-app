@@ -147,12 +147,20 @@ private fun AppScreen() {
             }
         }
 
-        OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.fillMaxWidth(),enabled=streetSelected,label={Text("Número")},singleLine=true)
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Endereço completo", style = MaterialTheme.typography.labelMedium)
-                Text(fields().display().ifBlank { "Preencha os campos acima para montar o endereço." })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                number,
+                { number = it.take(10); clearCoords() },
+                Modifier.width(96.dp),
+                enabled = streetSelected,
+                label = { Text("Número") },
+                singleLine = true
+            )
+            Card(Modifier.weight(1f)) {
+                Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Endereço completo", style = MaterialTheme.typography.labelMedium)
+                    Text(fields().display().ifBlank { "Preencha os campos acima." }, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
