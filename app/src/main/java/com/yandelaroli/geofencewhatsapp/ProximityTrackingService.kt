@@ -153,7 +153,7 @@ class ProximityTrackingService : Service() {
 
     companion object {
         const val EXTRA_RULE_ID = "rule_id"
-        const val APPROACH_RADIUS_METERS = 2000f
+        const val APPROACH_RADIUS_METERS = 750f
         private const val MAX_TRACKING_MS = 30 * 60 * 1000L
         private const val CHANNEL_ID = "proximity_tracking"
         private const val NOTIFICATION_ID = 7002
