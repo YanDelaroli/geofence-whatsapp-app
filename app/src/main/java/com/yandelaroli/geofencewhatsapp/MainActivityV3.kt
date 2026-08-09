@@ -120,25 +120,25 @@ private fun AppScreen() {
 
     LaunchedEffect(Unit){ if(!permissionsStarted&&!firstRun){permissionsStarted=true;requestPermissions()}; loadingStates=true; states=runCatching{ibgeStates()}.getOrElse{emptyList()}; loadingStates=false }
     LaunchedEffect(city,state,citySelected){ val q=city.trim(); if(state.isBlank()||citySelected||q.length<3){cityOptions=emptyList();cityLoading=false;return@LaunchedEffect};delay(350);cityLoading=true;cityOptions=runCatching{placeNames(context,q,state,null,null,Kind.CITY)}.getOrElse{emptyList()};cityLoading=false }
-    LaunchedEffect(district,state,city,citySelected,districtSelected){ val q=district.trim(); if(!citySelected||districtSelected||q.length<2){districtOptions=emptyList();districtLoading=false;return@LaunchedEffect};delay(300);districtLoading=true;districtOptions=runCatching{placeNames(context,q,state,city,null,Kind.DISTRICT)}.getOrElse{emptyList()};districtLoading=false }
-    LaunchedEffect(street,state,city,district,citySelected,streetSelected){ val q=street.trim(); if(!citySelected||streetSelected||q.length<2){streetOptions=emptyList();streetLoading=false;return@LaunchedEffect};delay(300);streetLoading=true;streetOptions=runCatching{placeNames(context,q,state,city,district.takeIf{districtSelected},Kind.STREET)}.getOrElse{emptyList()};streetLoading=false }
+    LaunchedEffect(district,state,city,citySelected,districtSelected){ val q=district.trim(); if(!citySelected||districtSelected||q.length<2){districtOptions=emptyList();districtLoading=false;return@LaunchedEffect};delay(220);districtLoading=true;districtOptions=runCatching{placeNames(context,q,state,city,null,Kind.DISTRICT)}.getOrElse{emptyList()};districtLoading=false }
+    LaunchedEffect(street,state,city,district,citySelected,streetSelected){ val q=street.trim(); if(!citySelected||streetSelected||q.length<2){streetOptions=emptyList();streetLoading=false;return@LaunchedEffect};delay(220);streetLoading=true;streetOptions=runCatching{placeNames(context,q,state,city,district.takeIf{districtSelected},Kind.STREET)}.getOrElse{emptyList()};streetLoading=false }
 
     if(firstRun) AlertDialog(onDismissRequest={},title={Text("Permissões de localização")},text={Text("Para detectar sua chegada mesmo com o aplicativo fechado, mantenha a localização ligada e permita acesso o tempo todo. Este aviso aparece somente na primeira vez após instalar.")},confirmButton={Button(onClick={prefs.edit().putBoolean("permission_intro_shown",true).apply();firstRun=false;permissionsStarted=true;requestPermissions()}){Text("Continuar")}})
     if(showAlways) AlertDialog(onDismissRequest={showAlways=false},title={Text("Permita localização o tempo todo")},text={Text("Nas configurações do Android, escolha Localização → Permitir o tempo todo.")},confirmButton={Button(onClick={showAlways=false;context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}){Text("Abrir configurações")}},dismissButton={TextButton(onClick={showAlways=false}){Text("Agora não")}})
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text("Mensagem por localização",style=MaterialTheme.typography.headlineSmall)
-        if(editId!=null) Card(Modifier.fillMaxWidth()){Column(Modifier.padding(10.dp)){Text("Editando local salvo");TextButton(onClick={clearForm()}){Text("Cancelar edição")}}}
+        if(editId!=null) Card(Modifier.fillMaxWidth()){Column(Modifier.padding(8.dp)){Text("Editando local salvo");TextButton(onClick={clearForm()}){Text("Cancelar edição")}}}
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.width(92.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.width(78.dp)) {
                 CompactSelector("UF",state,states.map{"${it.uf} - ${it.name}"},if(loadingStates)"..." else "UF",!loadingStates&&states.isNotEmpty()){choice->state=choice.substringBefore(" - ");city="";citySelected=false;district="";districtSelected=false;street="";streetSelected=false;number="";clearCoords()}
             }
             Box(Modifier.weight(1f)) {
                 Typeahead("Cidade",city,state.isNotBlank(),citySelected,cityLoading,cityOptions,"Cidades possíveis",onChange={city=it;citySelected=false;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={city=it;citySelected=true;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true,minChars=3)
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.weight(1f)) {
                 Typeahead("Bairro",district,citySelected,districtSelected,districtLoading,districtOptions,"Bairros possíveis",onChange={district=it;districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={district=it;districtSelected=true;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true,minChars=2)
             }
@@ -147,14 +147,14 @@ private fun AppScreen() {
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(96.dp),enabled=streetSelected,label={Text("Número")},singleLine=true)
-            Card(Modifier.weight(1f)) { Column(Modifier.padding(horizontal=10.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){Text("Endereço completo",style=MaterialTheme.typography.labelMedium);Text(fields().display().ifBlank{"Preencha os campos acima."},style=MaterialTheme.typography.bodySmall)} }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(82.dp).height(52.dp),enabled=streetSelected,label={Text("Nº")},singleLine=true)
+            Card(Modifier.weight(1f).height(52.dp)) { Column(Modifier.padding(horizontal=8.dp,vertical=5.dp),verticalArrangement=Arrangement.spacedBy(1.dp)){Text("Endereço completo",style=MaterialTheme.typography.labelSmall);Text(fields().display().ifBlank{"Preencha os campos acima."},style=MaterialTheme.typography.bodySmall,maxLines=2)} }
         }
 
         Button(onClick={if(state.isBlank()||!citySelected||!streetSelected)status="Escolha Estado, Cidade e Rua." else geocode(context,fields().query()){r->r.fold({apply(it);status="Endereço encontrado."},{status="Não encontrei esse endereço."})}},modifier=Modifier.fillMaxWidth()){Text("Buscar endereço")}
         Button(onClick={when{!hasFine()->locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION));!locationEnabled()->context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));else->{val token=CancellationTokenSource();locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,token.token).addOnSuccessListener{l->if(l==null)status="Não foi possível obter sua localização." else reverse(context,l.latitude,l.longitude){r->if(r!=null)apply(r.copy(lat=l.latitude,lon=l.longitude))else{lat=l.latitude;lon=l.longitude;selectedAddress="Minha localização atual"};if(name.isBlank())name="Local atual";status="Localização atual selecionada."}}}}},modifier=Modifier.fillMaxWidth()){Text("Usar minha localização atual")}
-        if(lat!=null&&lon!=null)Card(Modifier.fillMaxWidth()){Column(Modifier.padding(10.dp)){Text("Local selecionado");Text(selectedAddress.ifBlank{fields().display()})}}
+        if(lat!=null&&lon!=null)Card(Modifier.fillMaxWidth()){Column(Modifier.padding(8.dp)){Text("Local selecionado");Text(selectedAddress.ifBlank{fields().display()})}}
         Text("Raio: ${radius.toInt()} m");Slider(radius,{radius=it},valueRange=50f..1000f,steps=18)
         OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Nome do local")},singleLine=true)
         OutlinedTextField(phone,{raw->var d=raw.filter(Char::isDigit).take(13);if(d.startsWith("55")&&d.length>11)d=d.drop(2);phone=d.take(11)},Modifier.fillMaxWidth(),label={Text("WhatsApp (DDD + número)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),singleLine=true)
@@ -169,7 +169,7 @@ private fun AppScreen() {
 @Composable
 private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false,compact:Boolean=false,minChars:Int=3){
     Box(Modifier.fillMaxWidth()) {
-        OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1 until minChars->"Digite pelo menos $minChars letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
+        OutlinedTextField(value,onChange,Modifier.fillMaxWidth().height(52.dp),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1 until minChars->"Digite pelo menos $minChars letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
         DropdownMenu(
             expanded=enabled&&!selected&&value.trim().length>=minChars,
             onDismissRequest={},
@@ -178,7 +178,7 @@ private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean
         ) {
             DropdownMenuItem(text={Text(title)},onClick={})
             when {
-                loading -> DropdownMenuItem(text={Text("Buscando...")},onClick={})
+                loading -> DropdownMenuItem(text={Text("Carregando lista local...")},onClick={})
                 options.isEmpty() -> {
                     DropdownMenuItem(text={Text("Nenhum resultado encontrado.")},onClick={})
                     if(allowTypedFallback) DropdownMenuItem(text={Text("Usar ‘${value.trim()}’")},onClick={onPick(value.trim())})
@@ -193,9 +193,9 @@ private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean
 private fun CompactSelector(label:String,selected:String,options:List<String>,placeholder:String,enabled:Boolean,onSelect:(String)->Unit){
     var expanded by remember{mutableStateOf(false)}
     Column{
-        Text(label,style=MaterialTheme.typography.labelMedium)
+        Text(label,style=MaterialTheme.typography.labelSmall)
         Box(Modifier.fillMaxWidth()){
-            OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth(),enabled=enabled){Text(selected.ifBlank{placeholder})}
+            OutlinedButton(onClick={if(enabled)expanded=true},modifier=Modifier.fillMaxWidth().height(46.dp),enabled=enabled){Text(selected.ifBlank{placeholder})}
             DropdownMenu(expanded,{expanded=false}){options.forEach{o->DropdownMenuItem(text={Text(o)},onClick={expanded=false;onSelect(o)})}}
         }
     }
@@ -205,62 +205,20 @@ private fun parse(a:String):Fields{val p=a.split(" - ").map{it.trim()};val s=p.g
 private suspend fun ibgeStates(): List<StateItem> = withContext(Dispatchers.IO){val c=URL("https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome").openConnection() as HttpURLConnection;try{c.connectTimeout=8000;c.readTimeout=8000;if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val a=JSONArray(c.inputStream.bufferedReader().use{it.readText()});buildList{for(i in 0 until a.length()){val o=a.optJSONObject(i)?:continue;val uf=o.optString("sigla");val n=o.optString("nome");if(uf.isNotBlank()&&n.isNotBlank())add(StateItem(uf,n))}}}finally{c.disconnect()}}
 
 @Suppress("DEPRECATION")
-private suspend fun placeNames(context:Context,typed:String,state:String,city:String?,district:String?,kind:Kind): List<String> = withContext(Dispatchers.IO){
-    val term=typed.trim()
-    val suggestions=linkedSetOf<String>()
-
-    fun addCandidate(raw:String?) {
-        val candidate=raw.orEmpty().trim()
-        if(candidate.isNotBlank() && candidate.length>1 && candidate.contains(term,true)) suggestions.add(candidate)
+private suspend fun placeNames(context:Context,typed:String,state:String,city:String?,district:String?,kind:Kind): List<String> = when(kind){
+    Kind.DISTRICT -> AddressCatalog.filter(AddressCatalog.districts(context,city.orEmpty(),state),typed)
+    Kind.STREET -> AddressCatalog.filter(AddressCatalog.streets(context,district.orEmpty(),city.orEmpty(),state),typed)
+    Kind.CITY -> withContext(Dispatchers.IO){
+        val term=typed.trim();val suggestions=linkedSetOf<String>()
+        fun addCandidate(raw:String?){val candidate=raw.orEmpty().trim();if(candidate.isNotBlank()&&candidate.contains(term,true))suggestions.add(candidate)}
+        runCatching{Geocoder(context,Locale("pt","BR")).getFromLocationName("$term, $state, Brasil",20).orEmpty()}.getOrDefault(emptyList()).forEach{a->val addressState=uf(a.adminArea.orEmpty());if(addressState.isBlank()||addressState.equals(state,true)){addCandidate(a.locality);addCandidate(a.subAdminArea);addCandidate(a.featureName)}}
+        val q="$term $state Brasil";val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=40&lang=pt&countrycode=BR").openConnection() as HttpURLConnection
+        try{c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/2.0");if(c.responseCode in 200..299){val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features");if(f!=null)for(i in 0 until f.length()){val p=f.optJSONObject(i)?.optJSONObject("properties")?:continue;val rs=uf(p.optString("state"));if(rs.isNotBlank()&&!rs.equals(state,true))continue;addCandidate(p.optString("city"));addCandidate(p.optString("locality"));addCandidate(p.optString("name"))}}}finally{c.disconnect()}
+        suggestions.toList().distinct().sortedWith(compareBy<String>({!it.startsWith(term,true)},{it.length},{it.lowercase(Locale.ROOT)})).take(25)
     }
-
-    val nativeQueries=when(kind){
-        Kind.CITY->listOf("$term, $state, Brasil")
-        Kind.DISTRICT->listOf("$term, $city, $state, Brasil","bairro $term, $city, $state, Brasil","$term bairro $city $state")
-        Kind.STREET->listOf("$term, $city, $state, Brasil","rua $term, $city, $state, Brasil","avenida $term, $city, $state, Brasil","$term, ${district.orEmpty()}, $city, $state, Brasil")
-    }
-
-    nativeQueries.distinct().forEach { query ->
-        runCatching{Geocoder(context,Locale("pt","BR")).getFromLocationName(query,30).orEmpty()}.getOrDefault(emptyList()).forEach { a ->
-            val addressState=uf(a.adminArea.orEmpty())
-            if(addressState.isNotBlank()&&!addressState.equals(state,true))return@forEach
-            when(kind){
-                Kind.CITY->{addCandidate(a.locality);addCandidate(a.subAdminArea);addCandidate(a.featureName)}
-                Kind.DISTRICT->{addCandidate(a.subLocality);addCandidate(a.featureName)}
-                Kind.STREET->{addCandidate(a.thoroughfare);addCandidate(a.featureName)}
-            }
-        }
-    }
-
-    val photonQueries=when(kind){
-        Kind.CITY->listOf("$term $state Brasil")
-        Kind.DISTRICT->listOf("$term $city $state","bairro $term $city $state","$term $state")
-        Kind.STREET->listOf("$term $city $state","rua $term $city $state","avenida $term $city $state",listOf(term,district,city,state).filterNotNull().joinToString(" "))
-    }.filter{it.isNotBlank()}.distinct()
-
-    photonQueries.forEach { q ->
-        val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=80&lang=pt&countrycode=BR").openConnection() as HttpURLConnection
-        try{
-            c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.6")
-            if(c.responseCode in 200..299){
-                val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")
-                if(f!=null)for(i in 0 until f.length()){
-                    val p=f.optJSONObject(i)?.optJSONObject("properties")?:continue
-                    val rs=uf(p.optString("state"));if(rs.isNotBlank()&&!rs.equals(state,true))continue
-                    when(kind){
-                        Kind.CITY->{addCandidate(p.optString("city"));addCandidate(p.optString("locality"));addCandidate(p.optString("name"))}
-                        Kind.DISTRICT->{addCandidate(p.optString("district"));addCandidate(p.optString("suburb"));addCandidate(p.optString("locality"));addCandidate(p.optString("name"))}
-                        Kind.STREET->{addCandidate(p.optString("street"));addCandidate(p.optString("name"))}
-                    }
-                }
-            }
-        } finally { c.disconnect() }
-    }
-
-    suggestions.toList().distinct().sortedWith(compareBy<String>({!it.startsWith(term,true)},{it.length},{it.lowercase(Locale.ROOT)})).take(30)
 }
 
-private suspend fun addressSearch(q:String): List<Resolved> = withContext(Dispatchers.IO){val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=8&lang=pt&countrycode=BR").openConnection() as HttpURLConnection;try{c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.6");if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")?:return@withContext emptyList();buildList{for(i in 0 until f.length()){val x=f.optJSONObject(i)?:continue;val p=x.optJSONObject("properties")?:JSONObject();val co=x.optJSONObject("geometry")?.optJSONArray("coordinates")?:continue;val lo=co.optDouble(0,Double.NaN);val la=co.optDouble(1,Double.NaN);if(!la.isFinite()||!lo.isFinite())continue;val n=p.optString("name");val fs=Fields(p.optString("street").ifBlank{n},p.optString("housenumber"),p.optString("district").ifBlank{p.optString("locality")},p.optString("city").ifBlank{p.optString("county")},uf(p.optString("state")));add(Resolved(la,lo,fs.display().ifBlank{n.ifBlank{q}},n.ifBlank{fs.street.ifBlank{fs.city}},fs))}}}finally{c.disconnect()}}
+private suspend fun addressSearch(q:String): List<Resolved> = withContext(Dispatchers.IO){val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=8&lang=pt&countrycode=BR").openConnection() as HttpURLConnection;try{c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/2.0");if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")?:return@withContext emptyList();buildList{for(i in 0 until f.length()){val x=f.optJSONObject(i)?:continue;val p=x.optJSONObject("properties")?:JSONObject();val co=x.optJSONObject("geometry")?.optJSONArray("coordinates")?:continue;val lo=co.optDouble(0,Double.NaN);val la=co.optDouble(1,Double.NaN);if(!la.isFinite()||!lo.isFinite())continue;val n=p.optString("name");val fs=Fields(p.optString("street").ifBlank{n},p.optString("housenumber"),p.optString("district").ifBlank{p.optString("locality")},p.optString("city").ifBlank{p.optString("county")},uf(p.optString("state")));add(Resolved(la,lo,fs.display().ifBlank{n.ifBlank{q}},n.ifBlank{fs.street.ifBlank{fs.city}},fs))}}}finally{c.disconnect()}}
 private fun geocode(context:Context,q:String,cb:(Result<Resolved>)->Unit){val g=Geocoder(context,Locale("pt","BR"));fun d(a:Address?){if(a==null)cb(Result.failure(IllegalArgumentException("Endereço não encontrado")))else cb(Result.success(a.resolved(q)))};if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU)g.getFromLocationName(q,1){d(it.firstOrNull())}else Thread{val r=runCatching{g.getFromLocationName(q,1)?.firstOrNull()}.getOrNull();Handler(Looper.getMainLooper()).post{d(r)}}.start()}
 private fun reverse(context:Context,la:Double,lo:Double,cb:(Resolved?)->Unit){val g=Geocoder(context,Locale("pt","BR"));fun d(a:Address?){cb(a?.resolved("Minha localização atual"))};if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU)g.getFromLocation(la,lo,1){d(it.firstOrNull())}else Thread{val r=runCatching{g.getFromLocation(la,lo,1)?.firstOrNull()}.getOrNull();Handler(Looper.getMainLooper()).post{d(r)}}.start()}
 private fun Address.resolved(fallback:String):Resolved{val f=Fields(thoroughfare?:featureName.orEmpty(),subThoroughfare.orEmpty(),subLocality.orEmpty(),locality?:subAdminArea.orEmpty(),uf(adminArea.orEmpty()));return Resolved(latitude,longitude,f.display().ifBlank{getAddressLine(0)?:fallback},thoroughfare?:featureName?:locality?:"Local",f)}
