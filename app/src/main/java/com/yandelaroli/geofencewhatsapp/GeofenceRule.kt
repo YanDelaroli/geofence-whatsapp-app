@@ -9,5 +9,6 @@ data class GeofenceRule(
     val radiusMeters: Float,
     val phone: String,
     val message: String,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val autoSendAuthorized: Boolean = false
 )
