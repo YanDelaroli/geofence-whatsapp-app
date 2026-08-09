@@ -79,6 +79,7 @@ private fun GeofenceScreen() {
     val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var rules by remember { mutableStateOf(store.load()) }
+    var editingRuleId by remember { mutableStateOf<String?>(null) }
     var addressQuery by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<AddressSuggestion>>(emptyList()) }
     var isSearchingSuggestions by remember { mutableStateOf(false) }
@@ -114,6 +115,56 @@ private fun GeofenceScreen() {
         }
     }
 
+    fun clearForm() {
+        editingRuleId = null
+        addressQuery = ""
+        suggestions = emptyList()
+        suggestionError = false
+        selectedAddress = ""
+        selectedLatitude = null
+        selectedLongitude = null
+        keepCurrentCoordinatesWhileEditing = false
+        name = ""
+        radius = 150f
+        phone = ""
+        message = "Estou chegando."
+    }
+
+    fun loadRuleForEditing(rule: GeofenceRule) {
+        editingRuleId = rule.id
+        addressQuery = rule.address
+        selectedAddress = rule.address
+        selectedLatitude = rule.latitude
+        selectedLongitude = rule.longitude
+        keepCurrentCoordinatesWhileEditing = true
+        name = rule.name
+        radius = rule.radiusMeters
+        phone = rule.phone.filter(Char::isDigit).removePrefix("55").takeLast(11)
+        message = rule.message
+        suggestions = emptyList()
+        status = "Editando ${rule.name}. Altere os dados e toque em Salvar alterações."
+    }
+
+    fun openAppSettings() {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${context.packageName}")
+            )
+        )
+    }
+
+    fun persistAndRegister(updated: List<GeofenceRule>, successMessage: String = "Regras atualizadas e áreas ativadas.") {
+        store.save(updated)
+        rules = updated
+        geofenceManager.registerAll(updated) { result ->
+            status = result.fold(
+                onSuccess = { successMessage },
+                onFailure = { "Não foi possível ativar as áreas: ${it.message ?: "erro desconhecido"}" }
+            )
+        }
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -128,7 +179,9 @@ private fun GeofenceScreen() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation()) {
                 showAlwaysLocationDialog = true
             }
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         } else {
@@ -139,17 +192,17 @@ private fun GeofenceScreen() {
     LaunchedEffect(Unit) {
         if (!startupPermissionsRequested) {
             startupPermissionsRequested = true
-            if (!hasFineLocation()) {
-                locationPermissionLauncher.launch(
+            when {
+                !hasFineLocation() -> locationPermissionLauncher.launch(
                     arrayOf(
                         Manifest.permission.ACCESS_FINE_LOCATION,
                         Manifest.permission.ACCESS_COARSE_LOCATION
                     )
                 )
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation()) {
-                showAlwaysLocationDialog = true
-            } else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation() -> showAlwaysLocationDialog = true
+                Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -162,7 +215,6 @@ private fun GeofenceScreen() {
             suggestionError = false
             return@LaunchedEffect
         }
-
         delay(450)
         isSearchingSuggestions = true
         suggestionError = false
@@ -183,26 +235,6 @@ private fun GeofenceScreen() {
         status = "Local selecionado: ${suggestion.label}"
     }
 
-    fun openAppSettings() {
-        context.startActivity(
-            Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:${context.packageName}")
-            )
-        )
-    }
-
-    fun persistAndRegister(updated: List<GeofenceRule>) {
-        store.save(updated)
-        rules = updated
-        geofenceManager.registerAll(updated) { result ->
-            status = result.fold(
-                onSuccess = { "Regras atualizadas e áreas ativadas." },
-                onFailure = { "Não foi possível ativar as áreas: ${it.message ?: "erro desconhecido"}" }
-            )
-        }
-    }
-
     if (showAlwaysLocationDialog) {
         AlertDialog(
             onDismissRequest = { showAlwaysLocationDialog = false },
@@ -215,12 +247,9 @@ private fun GeofenceScreen() {
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showAlwaysLocationDialog = false
-                        openAppSettings()
-                    }
-                ) { Text("Abrir configurações") }
+                Button(onClick = { showAlwaysLocationDialog = false; openAppSettings() }) {
+                    Text("Abrir configurações")
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showAlwaysLocationDialog = false }) { Text("Agora não") }
@@ -238,12 +267,9 @@ private fun GeofenceScreen() {
         Text("Mensagem por localização", style = MaterialTheme.typography.headlineSmall)
 
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Permissões necessárias", style = MaterialTheme.typography.titleMedium)
-                Text("Para funcionar corretamente, mantenha a localização do celular ligada e conceda ao app acesso à localização 'o tempo todo'.")
+                Text("Mantenha a localização do celular ligada e conceda ao app acesso à localização 'o tempo todo'.")
                 Text(
                     when {
                         !hasFineLocation() -> "Status: localização ainda não autorizada."
@@ -260,10 +286,21 @@ private fun GeofenceScreen() {
                     ) { Text("Ligar localização") }
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocation()) {
-                    Button(
-                        onClick = { showAlwaysLocationDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Permitir localização o tempo todo") }
+                    Button(onClick = { showAlwaysLocationDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Permitir localização o tempo todo")
+                    }
+                }
+            }
+        }
+
+        if (editingRuleId != null) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Editando local salvo", style = MaterialTheme.typography.titleMedium)
+                    Text("Você pode alterar qualquer campo abaixo. Para mudar o ponto geográfico, escolha uma sugestão, busque o endereço novamente ou use sua localização atual.")
+                    TextButton(onClick = { clearForm(); status = "Edição cancelada." }) {
+                        Text("Cancelar edição")
+                    }
                 }
             }
         }
@@ -287,7 +324,7 @@ private fun GeofenceScreen() {
             supportingText = {
                 Text(
                     when {
-                        keepCurrentCoordinatesWhileEditing -> "Você pode corrigir o texto sem alterar as coordenadas obtidas pelo GPS."
+                        keepCurrentCoordinatesWhileEditing -> "Você pode editar o texto; para alterar as coordenadas, use Buscar endereço ou escolha uma sugestão."
                         isSearchingSuggestions -> "Buscando sugestões..."
                         suggestionError -> "Não foi possível carregar sugestões. Verifique sua internet."
                         addressQuery.length in 1..2 -> "Digite pelo menos 3 caracteres"
@@ -302,10 +339,7 @@ private fun GeofenceScreen() {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     suggestions.forEach { suggestion ->
-                        TextButton(
-                            onClick = { selectSuggestion(suggestion) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        TextButton(onClick = { selectSuggestion(suggestion) }, modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(suggestion.shortName, style = MaterialTheme.typography.titleSmall)
                                 Text(suggestion.label, style = MaterialTheme.typography.bodySmall)
@@ -382,7 +416,7 @@ private fun GeofenceScreen() {
                             .addOnFailureListener {
                                 status = "Erro ao obter localização: ${it.message ?: "erro desconhecido"}"
                             }
-                    } catch (securityException: SecurityException) {
+                    } catch (_: SecurityException) {
                         status = "Permissão de localização não concedida."
                     }
                 }
@@ -392,10 +426,7 @@ private fun GeofenceScreen() {
 
         if (selectedLatitude != null && selectedLongitude != null) {
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Local selecionado", style = MaterialTheme.typography.titleMedium)
                     Text(addressQuery.ifBlank { selectedAddress.ifBlank { "Coordenadas obtidas" } })
                 }
@@ -403,12 +434,7 @@ private fun GeofenceScreen() {
         }
 
         Text("Raio: ${radius.toInt()} m")
-        Slider(
-            value = radius,
-            onValueChange = { radius = it },
-            valueRange = 50f..1000f,
-            steps = 18
-        )
+        Slider(value = radius, onValueChange = { radius = it }, valueRange = 50f..1000f, steps = 18)
 
         OutlinedTextField(
             value = name,
@@ -428,7 +454,7 @@ private fun GeofenceScreen() {
             },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("WhatsApp (DDD + número)") },
-            supportingText = { Text("Brasil (+55) já é aplicado automaticamente. Ex.: 21999999999") },
+            supportingText = { Text("Brasil (+55) é aplicado automaticamente. Ex.: 21999999999") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             singleLine = true
         )
@@ -443,58 +469,46 @@ private fun GeofenceScreen() {
 
         Button(
             onClick = {
-                locationPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
-                )
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Revisar permissões de localização") }
-
-        Button(
-            onClick = {
                 val lat = selectedLatitude
                 val lon = selectedLongitude
-                val localPhone = phone.filter(Char::isDigit).removePrefix("55")
+                val localPhone = phone.filter(Char::isDigit)
                 when {
                     !hasFineLocation() -> status = "Autorize a localização primeiro."
-                    !hasBackgroundLocation() -> {
-                        status = "Permita localização o tempo todo antes de ativar a regra."
-                        showAlwaysLocationDialog = true
-                    }
-                    !isLocationEnabled() -> status = "Mantenha a localização do aparelho ligada."
                     lat == null || lon == null -> status = "Escolha uma sugestão, busque o endereço ou use sua localização atual."
                     name.isBlank() -> status = "Dê um nome ao local."
                     localPhone.length !in 10..11 -> status = "Informe um WhatsApp válido com DDD e número."
                     message.isBlank() -> status = "Digite a mensagem."
-                    rules.size >= 100 -> status = "Limite de 100 locais atingido."
+                    editingRuleId == null && rules.size >= 100 -> status = "Limite de 100 locais atingido."
                     else -> {
-                        val newRule = GeofenceRule(
-                            id = UUID.randomUUID().toString(),
+                        val id = editingRuleId ?: UUID.randomUUID().toString()
+                        val existing = rules.firstOrNull { it.id == id }
+                        val updatedRule = GeofenceRule(
+                            id = id,
                             name = name.trim(),
-                            address = addressQuery.trim().ifBlank { selectedAddress },
+                            address = addressQuery.trim().ifBlank { selectedAddress.ifBlank { "Endereço não informado" } },
                             latitude = lat,
                             longitude = lon,
                             radiusMeters = radius,
                             phone = "55$localPhone",
-                            message = message.trim()
+                            message = message.trim(),
+                            enabled = existing?.enabled ?: true
                         )
-                        persistAndRegister(rules + newRule)
-                        addressQuery = ""
-                        selectedAddress = ""
-                        selectedLatitude = null
-                        selectedLongitude = null
-                        keepCurrentCoordinatesWhileEditing = false
-                        suggestions = emptyList()
-                        name = ""
-                        phone = ""
+                        if (editingRuleId == null) {
+                            persistAndRegister(rules + updatedRule, "Local salvo e ativado.")
+                        } else {
+                            persistAndRegister(
+                                rules.map { if (it.id == id) updatedRule else it },
+                                "Alterações salvas e geofence atualizado."
+                            )
+                        }
+                        clearForm()
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Salvar e ativar este local") }
+        ) {
+            Text(if (editingRuleId == null) "Salvar e ativar este local" else "Salvar alterações")
+        }
 
         Text(status, style = MaterialTheme.typography.bodyMedium)
 
@@ -506,33 +520,31 @@ private fun GeofenceScreen() {
         rules.forEach { rule ->
             val displayedPhone = rule.phone.filter(Char::isDigit).removePrefix("55")
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(rule.name, style = MaterialTheme.typography.titleMedium)
                     Text(rule.address)
                     Text("Raio: ${rule.radiusMeters.toInt()} m • WhatsApp: $displayedPhone")
                     Text(rule.message)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(if (rule.enabled) "Ativo" else "Desativado")
                             Switch(
                                 checked = rule.enabled,
                                 onCheckedChange = { enabled ->
                                     persistAndRegister(
-                                        rules.map {
-                                            if (it.id == rule.id) it.copy(enabled = enabled) else it
-                                        }
+                                        rules.map { if (it.id == rule.id) it.copy(enabled = enabled) else it }
                                     )
                                 }
                             )
                         }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { loadRuleForEditing(rule) }) { Text("Editar") }
                         Button(
-                            onClick = { persistAndRegister(rules.filterNot { it.id == rule.id }) }
+                            onClick = {
+                                if (editingRuleId == rule.id) clearForm()
+                                persistAndRegister(rules.filterNot { it.id == rule.id }, "Local excluído.")
+                            }
                         ) { Text("Excluir") }
                     }
                 }
@@ -557,35 +569,33 @@ private data class AddressSuggestion(
 
 private suspend fun searchPhotonSuggestions(query: String): List<AddressSuggestion> = withContext(Dispatchers.IO) {
     val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
-    val url = URL("https://photon.komoot.io/api/?q=$encoded&limit=7&lang=pt&bbox=-73.99,-33.75,-28.84,5.27")
+    val url = URL("https://photon.komoot.io/api/?q=$encoded&limit=7&lang=pt&lat=-14.235&lon=-51.9253")
     val connection = (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
-        connectTimeout = 7000
-        readTimeout = 7000
+        connectTimeout = 6000
+        readTimeout = 6000
         setRequestProperty("User-Agent", "GeofenceWhatsAppApp/0.5")
         setRequestProperty("Accept", "application/json")
     }
 
     try {
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) throw IllegalStateException("Photon HTTP $responseCode")
+        if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
         val body = connection.inputStream.bufferedReader().use { it.readText() }
         val features = JSONObject(body).optJSONArray("features") ?: return@withContext emptyList()
-
         buildList {
             for (index in 0 until features.length()) {
                 val feature = features.optJSONObject(index) ?: continue
-                val geometry = feature.optJSONObject("geometry") ?: continue
-                val coordinates = geometry.optJSONArray("coordinates") ?: continue
-                if (coordinates.length() < 2) continue
+                val properties = feature.optJSONObject("properties") ?: JSONObject()
+                val countryCode = properties.optString("countrycode").lowercase(Locale.ROOT)
+                val country = properties.optString("country")
+                if (countryCode.isNotBlank() && countryCode != "br") continue
+                if (countryCode.isBlank() && country.isNotBlank() && !country.contains("Brazil", true) && !country.contains("Brasil", true)) continue
 
+                val coordinates = feature.optJSONObject("geometry")?.optJSONArray("coordinates") ?: continue
+                if (coordinates.length() < 2) continue
                 val longitude = coordinates.optDouble(0, Double.NaN)
                 val latitude = coordinates.optDouble(1, Double.NaN)
                 if (!latitude.isFinite() || !longitude.isFinite()) continue
-
-                val properties = feature.optJSONObject("properties") ?: JSONObject()
-                val countryCode = properties.optString("countrycode")
-                if (countryCode.isNotBlank() && !countryCode.equals("BR", ignoreCase = true)) continue
 
                 val name = properties.optString("name").takeIf { it.isNotBlank() }
                 val street = properties.optString("street").takeIf { it.isNotBlank() }
@@ -593,27 +603,15 @@ private suspend fun searchPhotonSuggestions(query: String): List<AddressSuggesti
                 val postcode = properties.optString("postcode").takeIf { it.isNotBlank() }
                 val city = properties.optString("city").takeIf { it.isNotBlank() }
                     ?: properties.optString("district").takeIf { it.isNotBlank() }
-                    ?: properties.optString("county").takeIf { it.isNotBlank() }
                 val state = properties.optString("state").takeIf { it.isNotBlank() }
-
                 val streetLine = listOfNotNull(street ?: name, houseNumber).joinToString(", ")
                 val label = listOfNotNull(
-                    streetLine.takeIf { it.isNotBlank() },
-                    city,
-                    state,
-                    postcode
+                    streetLine.takeIf { it.isNotBlank() }, city, state, postcode
                 ).distinct().joinToString(" - ").ifBlank { name ?: query }
 
-                add(
-                    AddressSuggestion(
-                        latitude = latitude,
-                        longitude = longitude,
-                        label = label,
-                        shortName = name ?: street ?: city ?: "Local"
-                    )
-                )
+                add(AddressSuggestion(latitude, longitude, label, name ?: street ?: city ?: "Local"))
             }
-        }.distinctBy { "${it.latitude},${it.longitude}" }.take(7)
+        }.distinctBy { "${it.latitude},${it.longitude}" }
     } finally {
         connection.disconnect()
     }
@@ -621,7 +619,6 @@ private suspend fun searchPhotonSuggestions(query: String): List<AddressSuggesti
 
 private fun geocodeAddress(context: Context, query: String, callback: (Result<FoundAddress>) -> Unit) {
     val geocoder = Geocoder(context, Locale("pt", "BR"))
-
     fun deliver(address: android.location.Address?) {
         if (address == null) {
             callback(Result.failure(IllegalArgumentException("Endereço não encontrado")))
@@ -636,9 +633,7 @@ private fun geocodeAddress(context: Context, query: String, callback: (Result<Fo
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        geocoder.getFromLocationName(query, 1) { addresses ->
-            deliver(addresses.firstOrNull())
-        }
+        geocoder.getFromLocationName(query, 1) { addresses -> deliver(addresses.firstOrNull()) }
     } else {
         Thread {
             val result = runCatching { geocoder.getFromLocationName(query, 1)?.firstOrNull() }.getOrNull()
@@ -649,15 +644,9 @@ private fun geocodeAddress(context: Context, query: String, callback: (Result<Fo
 
 private fun reverseGeocode(context: Context, latitude: Double, longitude: Double, callback: (String?) -> Unit) {
     val geocoder = Geocoder(context, Locale("pt", "BR"))
-
-    fun deliver(address: android.location.Address?) {
-        callback(address?.getAddressLine(0))
-    }
-
+    fun deliver(address: android.location.Address?) { callback(address?.getAddressLine(0)) }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        geocoder.getFromLocation(latitude, longitude, 1) { addresses ->
-            deliver(addresses.firstOrNull())
-        }
+        geocoder.getFromLocation(latitude, longitude, 1) { addresses -> deliver(addresses.firstOrNull()) }
     } else {
         Thread {
             val result = runCatching { geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull() }.getOrNull()
