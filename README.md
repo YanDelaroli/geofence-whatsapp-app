@@ -4,9 +4,11 @@ Aplicativo Android em Kotlin que permite cadastrar locais por CEP, endereço ou 
 
 ## Recursos atuais
 
+- Autocomplete de endereço enquanto o usuário digita
+- Até 5 sugestões de endereço via Photon / OpenStreetMap
 - Cadastro por CEP ou endereço
 - Botão para usar a localização atual do celular
-- Conversão interna do endereço para coordenadas usando o `Geocoder` do Android
+- Conversão interna do endereço para coordenadas
 - Ajuste do raio entre 50 m e 1 km
 - Vários locais salvos
 - Nome, endereço, número e mensagem independentes por local
@@ -24,6 +26,7 @@ Aplicativo Android em Kotlin que permite cadastrar locais por CEP, endereço ou 
 - JDK 17
 - Android SDK 36
 - Dispositivo Android com Google Play services
+- Conexão com a internet para as sugestões de endereço
 
 Não é necessária chave do Google Maps.
 
@@ -35,14 +38,18 @@ O app solicita localização precisa. Para geofencing continuar funcionando em s
 
 Há duas formas:
 
-1. Digite um CEP ou endereço e toque em **Buscar CEP/endereço**.
+1. Comece a digitar um CEP ou endereço. Após pelo menos 3 caracteres, o app mostra sugestões. Toque no resultado correto para selecionar o local.
 2. Toque em **Usar minha localização atual** para cadastrar o ponto onde o celular está.
+
+Também existe o botão **Buscar endereço completo** como alternativa caso nenhuma sugestão seja adequada.
 
 Depois informe o nome do local, raio, número do WhatsApp e mensagem e toque em **Salvar e ativar este local**.
 
-## Observação sobre endereços
+## Sugestões de endereço
 
-O `Geocoder` depende do serviço de geocodificação disponível no dispositivo. Se um CEP isolado não retornar um resultado adequado, informe também rua, número, cidade e estado.
+As sugestões usam o Photon, um geocodificador baseado em dados do OpenStreetMap e projetado para pesquisa conforme o usuário digita. O app aplica um pequeno atraso antes da consulta e limita os resultados a 5 itens.
+
+Os dados de endereço são atribuídos a Photon / OpenStreetMap na interface.
 
 ## Limite de áreas
 
