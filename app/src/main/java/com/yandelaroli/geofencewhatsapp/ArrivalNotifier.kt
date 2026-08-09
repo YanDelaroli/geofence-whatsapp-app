@@ -35,19 +35,44 @@ object ArrivalNotifier {
             )
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle("Você chegou: ${rule.name}")
-            .setContentText("Toque para abrir o WhatsApp com a mensagem pronta.")
+            .setContentText(
+                if (rule.autoSendAuthorized)
+                    "Envio automático já autorizado para este local."
+                else
+                    "Toque para abrir o WhatsApp com a mensagem pronta."
+            )
             .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText("Você entrou na área '${rule.name}'. Toque para abrir o WhatsApp e enviar: ${rule.message}")
+                NotificationCompat.BigTextStyle().bigText(
+                    if (rule.autoSendAuthorized)
+                        "Você entrou na área '${rule.name}'. O envio automático está autorizado para esta regra."
+                    else
+                        "Você entrou na área '${rule.name}'. Você pode abrir o WhatsApp agora ou autorizar o envio automático para este local nas próximas vezes."
+                )
             )
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentIntent)
-            .build()
 
-        manager.notify(rule.id.hashCode(), notification)
+        if (!rule.autoSendAuthorized) {
+            val authorizeIntent = Intent(context, AutoSendAuthorizationReceiver::class.java).apply {
+                putExtra(AutoSendAuthorizationReceiver.EXTRA_RULE_ID, rule.id)
+            }
+            val authorizePendingIntent = PendingIntent.getBroadcast(
+                context,
+                rule.id.hashCode() xor 0x45A2,
+                authorizeIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_send,
+                "Autorizar automático",
+                authorizePendingIntent
+            )
+        }
+
+        manager.notify(rule.id.hashCode(), builder.build())
     }
 }
