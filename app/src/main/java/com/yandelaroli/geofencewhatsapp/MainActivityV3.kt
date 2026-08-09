@@ -119,9 +119,9 @@ private fun AppScreen() {
     fun requestPermissions(){ when { !hasFine()->locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION)); Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q&&!hasBackground()->showAlways=true; Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED->notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } }
 
     LaunchedEffect(Unit){ if(!permissionsStarted&&!firstRun){permissionsStarted=true;requestPermissions()}; loadingStates=true; states=runCatching{ibgeStates()}.getOrElse{emptyList()}; loadingStates=false }
-    LaunchedEffect(city,state,citySelected){ val q=city.trim(); if(state.isBlank()||citySelected||q.length<3){cityOptions=emptyList();cityLoading=false;return@LaunchedEffect};delay(400);cityLoading=true;cityOptions=runCatching{placeNames(context,q,state,null,null,Kind.CITY)}.getOrElse{emptyList()};cityLoading=false }
-    LaunchedEffect(district,state,city,citySelected,districtSelected){ val q=district.trim(); if(!citySelected||districtSelected||q.length<3){districtOptions=emptyList();districtLoading=false;return@LaunchedEffect};delay(400);districtLoading=true;districtOptions=runCatching{placeNames(context,q,state,city,null,Kind.DISTRICT)}.getOrElse{emptyList()};districtLoading=false }
-    LaunchedEffect(street,state,city,district,citySelected,streetSelected){ val q=street.trim(); if(!citySelected||streetSelected||q.length<3){streetOptions=emptyList();streetLoading=false;return@LaunchedEffect};delay(400);streetLoading=true;streetOptions=runCatching{placeNames(context,q,state,city,district.takeIf{districtSelected},Kind.STREET)}.getOrElse{emptyList()};streetLoading=false }
+    LaunchedEffect(city,state,citySelected){ val q=city.trim(); if(state.isBlank()||citySelected||q.length<3){cityOptions=emptyList();cityLoading=false;return@LaunchedEffect};delay(350);cityLoading=true;cityOptions=runCatching{placeNames(context,q,state,null,null,Kind.CITY)}.getOrElse{emptyList()};cityLoading=false }
+    LaunchedEffect(district,state,city,citySelected,districtSelected){ val q=district.trim(); if(!citySelected||districtSelected||q.length<2){districtOptions=emptyList();districtLoading=false;return@LaunchedEffect};delay(300);districtLoading=true;districtOptions=runCatching{placeNames(context,q,state,city,null,Kind.DISTRICT)}.getOrElse{emptyList()};districtLoading=false }
+    LaunchedEffect(street,state,city,district,citySelected,streetSelected){ val q=street.trim(); if(!citySelected||streetSelected||q.length<2){streetOptions=emptyList();streetLoading=false;return@LaunchedEffect};delay(300);streetLoading=true;streetOptions=runCatching{placeNames(context,q,state,city,district.takeIf{districtSelected},Kind.STREET)}.getOrElse{emptyList()};streetLoading=false }
 
     if(firstRun) AlertDialog(onDismissRequest={},title={Text("Permissões de localização")},text={Text("Para detectar sua chegada mesmo com o aplicativo fechado, mantenha a localização ligada e permita acesso o tempo todo. Este aviso aparece somente na primeira vez após instalar.")},confirmButton={Button(onClick={prefs.edit().putBoolean("permission_intro_shown",true).apply();firstRun=false;permissionsStarted=true;requestPermissions()}){Text("Continuar")}})
     if(showAlways) AlertDialog(onDismissRequest={showAlways=false},title={Text("Permita localização o tempo todo")},text={Text("Nas configurações do Android, escolha Localização → Permitir o tempo todo.")},confirmButton={Button(onClick={showAlways=false;context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}){Text("Abrir configurações")}},dismissButton={TextButton(onClick={showAlways=false}){Text("Agora não")}})
@@ -135,15 +135,15 @@ private fun AppScreen() {
                 CompactSelector("UF",state,states.map{"${it.uf} - ${it.name}"},if(loadingStates)"..." else "UF",!loadingStates&&states.isNotEmpty()){choice->state=choice.substringBefore(" - ");city="";citySelected=false;district="";districtSelected=false;street="";streetSelected=false;number="";clearCoords()}
             }
             Box(Modifier.weight(1f)) {
-                Typeahead("Cidade",city,state.isNotBlank(),citySelected,cityLoading,cityOptions,"Cidades possíveis",onChange={city=it;citySelected=false;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={city=it;citySelected=true;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true)
+                Typeahead("Cidade",city,state.isNotBlank(),citySelected,cityLoading,cityOptions,"Cidades possíveis",onChange={city=it;citySelected=false;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={city=it;citySelected=true;district="";districtSelected=false;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true,minChars=3)
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) {
-                Typeahead("Bairro",district,citySelected,districtSelected,districtLoading,districtOptions,"Bairros possíveis",onChange={district=it;districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={district=it;districtSelected=true;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true)
+                Typeahead("Bairro",district,citySelected,districtSelected,districtLoading,districtOptions,"Bairros possíveis",onChange={district=it;districtSelected=false;street="";streetSelected=false;clearCoords()},onPick={district=it;districtSelected=true;street="";streetSelected=false;clearCoords()},allowTypedFallback=true,compact=true,minChars=2)
             }
             Box(Modifier.weight(1.25f)) {
-                Typeahead("Rua",street,citySelected,streetSelected,streetLoading,streetOptions,"Ruas possíveis",onChange={street=it;streetSelected=false;clearCoords()},onPick={street=it;streetSelected=true;clearCoords()},allowTypedFallback=true,compact=true)
+                Typeahead("Rua",street,citySelected,streetSelected,streetLoading,streetOptions,"Ruas possíveis",onChange={street=it;streetSelected=false;clearCoords()},onPick={street=it;streetSelected=true;clearCoords()},allowTypedFallback=true,compact=true,minChars=2)
             }
         }
 
@@ -167,11 +167,11 @@ private fun AppScreen() {
 }
 
 @Composable
-private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false,compact:Boolean=false){
+private fun Typeahead(label:String,value:String,enabled:Boolean,selected:Boolean,loading:Boolean,options:List<String>,title:String,onChange:(String)->Unit,onPick:(String)->Unit,allowTypedFallback:Boolean=false,compact:Boolean=false,minChars:Int=3){
     Box(Modifier.fillMaxWidth()) {
-        OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1..2->"Digite pelo menos 3 letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
+        OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),enabled=enabled,label={Text(label)},supportingText=if(compact)null else {{Text(when{!enabled->"Complete a etapa anterior";selected->"$label selecionado";loading->"Buscando...";value.trim().length in 1 until minChars->"Digite pelo menos $minChars letras";else->"Digite as primeiras letras e escolha abaixo"})}},singleLine=true)
         DropdownMenu(
-            expanded=enabled&&!selected&&value.trim().length>=3,
+            expanded=enabled&&!selected&&value.trim().length>=minChars,
             onDismissRequest={},
             modifier=Modifier.fillMaxWidth(),
             properties=PopupProperties(focusable=false)
@@ -206,71 +206,61 @@ private suspend fun ibgeStates(): List<StateItem> = withContext(Dispatchers.IO){
 
 @Suppress("DEPRECATION")
 private suspend fun placeNames(context:Context,typed:String,state:String,city:String?,district:String?,kind:Kind): List<String> = withContext(Dispatchers.IO){
+    val term=typed.trim()
     val suggestions=linkedSetOf<String>()
 
-    val nativeQueries = when(kind) {
-        Kind.CITY -> listOf("$typed, $state, Brasil")
-        Kind.DISTRICT -> listOf("$typed, $city, $state, Brasil", "$typed bairro, $city, $state, Brasil")
-        Kind.STREET -> listOf("$typed, $city, $state, Brasil", "$typed rua, $city, $state, Brasil")
+    fun addCandidate(raw:String?) {
+        val candidate=raw.orEmpty().trim()
+        if(candidate.isNotBlank() && candidate.length>1 && candidate.contains(term,true)) suggestions.add(candidate)
     }
 
-    nativeQueries.forEach { nativeQuery ->
-        runCatching{Geocoder(context,Locale("pt","BR")).getFromLocationName(nativeQuery,20).orEmpty()}.getOrDefault(emptyList()).forEach { a ->
+    val nativeQueries=when(kind){
+        Kind.CITY->listOf("$term, $state, Brasil")
+        Kind.DISTRICT->listOf("$term, $city, $state, Brasil","bairro $term, $city, $state, Brasil","$term bairro $city $state")
+        Kind.STREET->listOf("$term, $city, $state, Brasil","rua $term, $city, $state, Brasil","avenida $term, $city, $state, Brasil","$term, ${district.orEmpty()}, $city, $state, Brasil")
+    }
+
+    nativeQueries.distinct().forEach { query ->
+        runCatching{Geocoder(context,Locale("pt","BR")).getFromLocationName(query,30).orEmpty()}.getOrDefault(emptyList()).forEach { a ->
             val addressState=uf(a.adminArea.orEmpty())
             if(addressState.isNotBlank()&&!addressState.equals(state,true))return@forEach
-            val locationNames=listOf(a.locality,a.subAdminArea,a.subLocality).filterNotNull().filter{it.isNotBlank()}
-            val cityMatches = city.isNullOrBlank() || locationNames.isEmpty() || locationNames.any { samePlace(it,city) }
-            if(kind!=Kind.CITY&&!cityMatches)return@forEach
-            val candidate=when(kind){
-                Kind.CITY -> (a.locality?:a.subAdminArea?:a.featureName).orEmpty()
-                Kind.DISTRICT -> (a.subLocality?:a.featureName?:a.locality).orEmpty()
-                Kind.STREET -> (a.thoroughfare?:a.featureName).orEmpty()
-            }.trim()
-            if(candidate.isNotBlank()&&(candidate.startsWith(typed,true)||candidate.contains(typed,true)))suggestions.add(candidate)
+            when(kind){
+                Kind.CITY->{addCandidate(a.locality);addCandidate(a.subAdminArea);addCandidate(a.featureName)}
+                Kind.DISTRICT->{addCandidate(a.subLocality);addCandidate(a.featureName)}
+                Kind.STREET->{addCandidate(a.thoroughfare);addCandidate(a.featureName)}
+            }
         }
     }
 
-    val photonQueries = when(kind) {
-        Kind.CITY -> listOf(listOf(typed,state,"Brasil"))
-        Kind.DISTRICT -> listOf(listOfNotNull(typed,city,state,"Brasil"), listOf(typed,state,"Brasil"))
-        Kind.STREET -> listOf(listOfNotNull(typed,district,city,state,"Brasil"), listOfNotNull(typed,city,state,"Brasil"))
-    }.map { parts -> parts.filter{it.isNotBlank()}.joinToString(", ") }.distinct()
+    val photonQueries=when(kind){
+        Kind.CITY->listOf("$term $state Brasil")
+        Kind.DISTRICT->listOf("$term $city $state","bairro $term $city $state","$term $state")
+        Kind.STREET->listOf("$term $city $state","rua $term $city $state","avenida $term $city $state",listOf(term,district,city,state).filterNotNull().joinToString(" "))
+    }.filter{it.isNotBlank()}.distinct()
 
     photonQueries.forEach { q ->
-        val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=60&lang=pt&countrycode=BR").openConnection() as HttpURLConnection
+        val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=80&lang=pt&countrycode=BR").openConnection() as HttpURLConnection
         try{
-            c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.5")
+            c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.6")
             if(c.responseCode in 200..299){
                 val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")
                 if(f!=null)for(i in 0 until f.length()){
                     val p=f.optJSONObject(i)?.optJSONObject("properties")?:continue
                     val rs=uf(p.optString("state"));if(rs.isNotBlank()&&!rs.equals(state,true))continue
-                    val locationNames=listOf(
-                        p.optString("city"),p.optString("county"),p.optString("locality"),p.optString("district"),p.optString("suburb")
-                    ).filter{it.isNotBlank()}
-                    val cityMatches=city.isNullOrBlank()||locationNames.isEmpty()||locationNames.any{samePlace(it,city)}
-                    if(kind!=Kind.CITY&&!cityMatches)continue
-                    val candidate=when(kind){
-                        Kind.CITY->p.optString("city").ifBlank{p.optString("locality")}.ifBlank{p.optString("name")}
-                        Kind.DISTRICT->p.optString("district").ifBlank{p.optString("suburb")}.ifBlank{p.optString("locality")}.ifBlank{p.optString("name")}
-                        Kind.STREET->p.optString("street").ifBlank{p.optString("name")}
-                    }.trim()
-                    if(candidate.isNotBlank()&&(candidate.startsWith(typed,true)||candidate.contains(typed,true)))suggestions.add(candidate)
+                    when(kind){
+                        Kind.CITY->{addCandidate(p.optString("city"));addCandidate(p.optString("locality"));addCandidate(p.optString("name"))}
+                        Kind.DISTRICT->{addCandidate(p.optString("district"));addCandidate(p.optString("suburb"));addCandidate(p.optString("locality"));addCandidate(p.optString("name"))}
+                        Kind.STREET->{addCandidate(p.optString("street"));addCandidate(p.optString("name"))}
+                    }
                 }
             }
         } finally { c.disconnect() }
     }
 
-    suggestions.toList().distinct().sorted().take(25)
+    suggestions.toList().distinct().sortedWith(compareBy<String>({!it.startsWith(term,true)},{it.length},{it.lowercase(Locale.ROOT)})).take(30)
 }
 
-private fun samePlace(a:String,b:String):Boolean {
-    val x=a.trim().lowercase(Locale.ROOT)
-    val y=b.trim().lowercase(Locale.ROOT)
-    return x==y || x.contains(y) || y.contains(x)
-}
-
-private suspend fun addressSearch(q:String): List<Resolved> = withContext(Dispatchers.IO){val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=8&lang=pt&countrycode=BR").openConnection() as HttpURLConnection;try{c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.5");if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")?:return@withContext emptyList();buildList{for(i in 0 until f.length()){val x=f.optJSONObject(i)?:continue;val p=x.optJSONObject("properties")?:JSONObject();val co=x.optJSONObject("geometry")?.optJSONArray("coordinates")?:continue;val lo=co.optDouble(0,Double.NaN);val la=co.optDouble(1,Double.NaN);if(!la.isFinite()||!lo.isFinite())continue;val n=p.optString("name");val fs=Fields(p.optString("street").ifBlank{n},p.optString("housenumber"),p.optString("district").ifBlank{p.optString("locality")},p.optString("city").ifBlank{p.optString("county")},uf(p.optString("state")));add(Resolved(la,lo,fs.display().ifBlank{n.ifBlank{q}},n.ifBlank{fs.street.ifBlank{fs.city}},fs))}}}finally{c.disconnect()}}
+private suspend fun addressSearch(q:String): List<Resolved> = withContext(Dispatchers.IO){val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=8&lang=pt&countrycode=BR").openConnection() as HttpURLConnection;try{c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","GeofenceWhatsAppApp/1.6");if(c.responseCode !in 200..299)error("HTTP ${c.responseCode}");val f=JSONObject(c.inputStream.bufferedReader().use{it.readText()}).optJSONArray("features")?:return@withContext emptyList();buildList{for(i in 0 until f.length()){val x=f.optJSONObject(i)?:continue;val p=x.optJSONObject("properties")?:JSONObject();val co=x.optJSONObject("geometry")?.optJSONArray("coordinates")?:continue;val lo=co.optDouble(0,Double.NaN);val la=co.optDouble(1,Double.NaN);if(!la.isFinite()||!lo.isFinite())continue;val n=p.optString("name");val fs=Fields(p.optString("street").ifBlank{n},p.optString("housenumber"),p.optString("district").ifBlank{p.optString("locality")},p.optString("city").ifBlank{p.optString("county")},uf(p.optString("state")));add(Resolved(la,lo,fs.display().ifBlank{n.ifBlank{q}},n.ifBlank{fs.street.ifBlank{fs.city}},fs))}}}finally{c.disconnect()}}
 private fun geocode(context:Context,q:String,cb:(Result<Resolved>)->Unit){val g=Geocoder(context,Locale("pt","BR"));fun d(a:Address?){if(a==null)cb(Result.failure(IllegalArgumentException("Endereço não encontrado")))else cb(Result.success(a.resolved(q)))};if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU)g.getFromLocationName(q,1){d(it.firstOrNull())}else Thread{val r=runCatching{g.getFromLocationName(q,1)?.firstOrNull()}.getOrNull();Handler(Looper.getMainLooper()).post{d(r)}}.start()}
 private fun reverse(context:Context,la:Double,lo:Double,cb:(Resolved?)->Unit){val g=Geocoder(context,Locale("pt","BR"));fun d(a:Address?){cb(a?.resolved("Minha localização atual"))};if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU)g.getFromLocation(la,lo,1){d(it.firstOrNull())}else Thread{val r=runCatching{g.getFromLocation(la,lo,1)?.firstOrNull()}.getOrNull();Handler(Looper.getMainLooper()).post{d(r)}}.start()}
 private fun Address.resolved(fallback:String):Resolved{val f=Fields(thoroughfare?:featureName.orEmpty(),subThoroughfare.orEmpty(),subLocality.orEmpty(),locality?:subAdminArea.orEmpty(),uf(adminArea.orEmpty()));return Resolved(latitude,longitude,f.display().ifBlank{getAddressLine(0)?:fallback},thoroughfare?:featureName?:locality?:"Local",f)}
