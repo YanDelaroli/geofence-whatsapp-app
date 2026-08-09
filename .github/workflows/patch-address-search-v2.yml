@@ -1,0 +1,90 @@
+name: Patch address search v2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-address-search-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refine address autocomplete and compact fields
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app/src/main/java/com/yandelaroli/geofencewhatsapp/MainActivityV3.kt')
+          s = p.read_text()
+
+          if 'import java.text.Normalizer' not in s:
+              s = s.replace('import java.net.URLEncoder\n', 'import java.net.URLEncoder\nimport java.text.Normalizer\n')
+
+          old = '''    fun addCandidate(raw:String?) {
+        val candidate=raw.orEmpty().trim()
+        if(candidate.isNotBlank() && candidate.length>1 && candidate.contains(term,true)) suggestions.add(candidate)
+    }'''
+          new = '''    fun addCandidate(raw:String?) {
+        val candidate=raw.orEmpty().trim()
+        if(candidate.isNotBlank() && candidate.length>1 && matchesTyped(candidate,term)) suggestions.add(candidate)
+    }'''
+          if old not in s:
+              raise SystemExit('addCandidate block not found')
+          s = s.replace(old, new, 1)
+
+          old_url = '''        val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=80&lang=pt&countrycode=BR").openConnection() as HttpURLConnection'''
+          new_url = '''        val layerFilter=when(kind){
+            Kind.CITY->"&layer=city&layer=locality"
+            Kind.DISTRICT->"&layer=district&layer=locality"
+            Kind.STREET->"&layer=street"
+        }
+        val c=URL("https://photon.komoot.io/api/?q=${URLEncoder.encode(q,"UTF-8")}&limit=80&lang=pt&countrycode=BR$layerFilter").openConnection() as HttpURLConnection'''
+          if old_url not in s:
+              raise SystemExit('Photon URL block not found')
+          s = s.replace(old_url, new_url, 1)
+
+          marker = '\nprivate suspend fun addressSearch(q:String): List<Resolved>'
+          helpers = '''
+private fun normalizeSearchText(value:String):String = Normalizer.normalize(value,Normalizer.Form.NFD)
+    .replace(Regex("\\\\p{M}+"),"")
+    .lowercase(Locale.ROOT)
+    .replace(Regex("[^a-z0-9 ]")," ")
+    .replace(Regex("\\\\s+")," ")
+    .trim()
+
+private fun matchesTyped(candidate:String,typed:String):Boolean{
+    val c=normalizeSearchText(candidate)
+    val q=normalizeSearchText(typed)
+    if(q.isBlank())return false
+    val words=c.split(" ").filter{it.isNotBlank()}
+    val queryWords=q.split(" ").filter{it.isNotBlank()}
+    return queryWords.all{part->words.any{it.startsWith(part)} || c.contains(part)}
+}
+'''
+          if 'private fun matchesTyped(' not in s:
+              if marker not in s:
+                  raise SystemExit('addressSearch marker not found')
+              s = s.replace(marker, helpers + marker, 1)
+
+          # Make the address entry controls more compact without changing their widths.
+          s = s.replace('OutlinedTextField(value,onChange,Modifier.fillMaxWidth(),enabled=enabled,',
+                        'OutlinedTextField(value,onChange,Modifier.fillMaxWidth().height(52.dp),enabled=enabled,', 1)
+          s = s.replace('OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(96.dp),enabled=streetSelected,',
+                        'OutlinedTextField(number,{number=it.take(10);clearCoords()},Modifier.width(82.dp).height(52.dp),enabled=streetSelected,', 1)
+          s = s.replace('Box(Modifier.width(92.dp)) {', 'Box(Modifier.width(78.dp)) {', 1)
+
+          p.write_text(s)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/yandelaroli/geofencewhatsapp/MainActivityV3.kt
+          git commit -m "Refine district street autocomplete and compact fields"
+          git push
